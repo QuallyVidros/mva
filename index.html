@@ -102,6 +102,7 @@
   <span class="sp"></span>
   <button class="btn ok sm" onclick="salvarNoSheets()">☁️ Salvar na Nuvem</button>
   <button class="btn sec sm" onclick="abrirListaNuvem()">📂 Abrir da Nuvem</button>
+  <button class="btn sec sm" onclick="diagnosticoNuvem()">🩺 Diagnóstico</button>
   <button class="btn sec sm" onclick="exportJSON()">💾 Exportar</button>
   <button class="btn sec sm" onclick="document.getElementById('imp').click()">📂 Importar</button>
   <input id="imp" type="file" accept=".json" class="hidden" onchange="importJSON(event)">
@@ -146,7 +147,7 @@
         <input type="number" id="ambP" placeholder="Prof. (mm)" style="width:130px">
         <button onclick="addAmbiente()">+ Ambiente</button>
       </div>
-      <p class="small" style="margin:8px 0 0 0">💡 A <b>largura</b> é o total do ambiente (ex.: 5000mm). Depois você adiciona <b>vãos</b> até completar essa largura.</p>
+      <p class="small" style="margin:8px 0 0 0">💡 A <b>largura</b> é o total do ambiente (ex.: 5000mm). Depois você adiciona <b>vãos</b> até completar essa largura. Use <b>÷ Dividir</b> para gerar vários vãos automaticamente.</p>
     </div>
 
     <div id="listaAmb"></div>
@@ -239,7 +240,7 @@
 
 <script>
 /* =====================================================================
-   OrçaPro v2.1 — Modelo de dados
+   OrçaPro v2.2 — Modelo de dados
    ===================================================================== */
 const TIPOS_VAO = {
   gaveta:        { nome:"Gaveta (vão)",       icone:"🗄️" },
@@ -259,9 +260,7 @@ const COMP_DEFAULT = {
       { matId:"p_tubo2550", qtdFormula:"2", desc:0, orientacao:"P" },
       { matId:"p_cant10",   qtdFormula:"2", desc:0, orientacao:"L" }
     ],
-    vidros: [
-      { matId:"v_temperado", qtdFormula:"1", descL:"3", descA:"6", orientacao:"porta" }
-    ],
+    vidros: [ { matId:"v_temperado", qtdFormula:"1", descL:"3", descA:"6", orientacao:"porta" } ],
     acm: [
       { matId:"acm", qtdFormula:"1", descL:"0", descA:"0", rotulo:"Fundo",   orientacao:"LA" },
       { matId:"acm", qtdFormula:"1", descL:"0", descA:"0", rotulo:"Lateral", orientacao:"PA" },
@@ -278,9 +277,7 @@ const COMP_DEFAULT = {
       { matId:"p_tubo2550", qtdFormula:"2", desc:0, orientacao:"P" },
       { matId:"p_cant10",   qtdFormula:"2", desc:0, orientacao:"L" }
     ],
-    vidros: [
-      { matId:"v_temperado", qtdFormula:"1", descL:"3", descA:"6", orientacao:"porta" }
-    ],
+    vidros: [ { matId:"v_temperado", qtdFormula:"1", descL:"3", descA:"6", orientacao:"porta" } ],
     acm: [
       { matId:"acm", qtdFormula:"1", descL:"0", descA:"0", rotulo:"Fundo",   orientacao:"LA" },
       { matId:"acm", qtdFormula:"1", descL:"0", descA:"0", rotulo:"Lateral", orientacao:"PA" },
@@ -296,9 +293,7 @@ const COMP_DEFAULT = {
       { matId:"p_tubo5050", qtdFormula:"2", desc:0, orientacao:"L" },
       { matId:"p_cant05",   qtdFormula:"2", desc:0, orientacao:"A" }
     ],
-    vidros: [
-      { matId:"v_temperado", qtdFormula:"1", descL:"3", descA:"6", orientacao:"porta" }
-    ],
+    vidros: [ { matId:"v_temperado", qtdFormula:"1", descL:"3", descA:"6", orientacao:"porta" } ],
     acm: [ { matId:"acm", qtdFormula:"1", descL:"0", descA:"0", rotulo:"Fundo", orientacao:"LA" } ],
     acess: [
       { matId:"a_dobradica", qtdFormula:"2" },
@@ -734,7 +729,6 @@ function cortarChapas(pecas, chapa){
 /* =====================================================================
    SINCRONIZAÇÃO COM GOOGLE SHEETS
    ===================================================================== */
-// ⚠️ SUBSTITUA esta URL pela URL do seu Web App (Apps Script)
 const SHEETS_API = "https://script.google.com/macros/s/AKfycbyiSKxFpYXZVSiWvLTPzoG1FCsRrP0bSDkq2jgafoZQOyDWethgp-yeiW8AocGZbq8Ncg/exec";
 
 let _sheetsTimer = null;
@@ -788,26 +782,32 @@ async function salvarNoSheets(silencioso = false){
 async function carregarDoSheets(id){
   try{
     const r = await sheetsRequest("carregar", { id });
+    if(!r.projeto) throw new Error("Projeto vazio");
     const p = r.projeto;
-    state.orcamento = {
-      id:p.id, numero:p.numero, cliente:p.cliente,
-      data:p.data, vendedor:p.vendedor,
-      validade: state.orcamento.validade, obs: state.orcamento.obs
-    };
-    state.ambientes   = p.ambientes   || [];
-    state.materiais   = p.materiais   || state.materiais;
-    state.composicoes = p.composicoes || state.composicoes;
-    state.params      = p.params      || state.params;
-    save(); render();
-    toast("☁️ Carregado da nuvem!");
+
+    state = normalizeState({
+      orcamento: {
+        id: p.id, numero: p.numero, cliente: p.cliente,
+        data: p.data, vendedor: p.vendedor,
+        telefone: "", validade: 15, obs: ""
+      },
+      ambientes:   p.ambientes   || [],
+      materiais:   p.materiais   || state.materiais,
+      composicoes: p.composicoes || state.composicoes,
+      params:      p.params      || state.params
+    });
+    save();
+    render();
+    toast("☁️ Carregado: " + (p.numero || p.id));
   }catch(e){
-    toast("Erro: " + e.message, true);
+    toast("Erro ao carregar: " + e.message, true);
+    console.error(e);
   }
 }
 
 async function listarDoSheets(){
-  try{ const r = await sheetsRequest("listar"); return r.lista; }
-  catch(e){ return []; }
+  try{ const r = await sheetsRequest("listar"); return r.lista || []; }
+  catch(e){ throw e; }
 }
 
 async function excluirDoSheets(id){
@@ -818,14 +818,124 @@ async function excluirDoSheets(id){
   }catch(e){ toast("Erro: " + e.message, true); }
 }
 
-async function abrirListaNuvem(){
-  toast("Carregando…");
-  const lista = await listarDoSheets();
-  if(!lista.length){ toast("Nenhum projeto na nuvem", true); return; }
+/* ====== DIAGNÓSTICO ====== */
+async function diagnosticoNuvem(){
   document.getElementById("modalRoot").innerHTML = `
     <div class="modal-bg" onclick="if(event.target===this)fecharModal()">
       <div class="modal">
-        <h2 style="color:var(--acc2)">📂 Projetos na Nuvem</h2>
+        <h2 style="color:var(--acc2)">🩺 Diagnóstico da Nuvem</h2>
+        <div id="diagBox"><p class="small">Testando…</p></div>
+        <button class="btn sec" style="margin-top:10px" onclick="fecharModal()">Fechar</button>
+      </div>
+    </div>`;
+  const box = document.getElementById("diagBox");
+
+  let html = "";
+  html += `<p><b>1) URL configurada:</b><br><code style="font-size:11px">${escapeHtml(SHEETS_API)}</code></p>`;
+
+  // Teste ping
+  try{
+    const t0 = Date.now();
+    const r = await sheetsRequest("ping");
+    html += `<p class="pill ok">✔️ ping OK em ${Date.now()-t0}ms</p>`;
+  }catch(e){
+    html += `<p class="pill err">❌ ping falhou: ${escapeHtml(e.message)}</p>`;
+    html += `<p class="small">Verifique: a URL está correta? O Web App está publicado como "Qualquer pessoa"? Você fez "Nova versão" no Gerenciar implantações?</p>`;
+    box.innerHTML = html;
+    return;
+  }
+
+  // Teste listar
+  try{
+    const r = await sheetsRequest("listar");
+    const lista = r.lista || [];
+    html += `<p class="pill ${lista.length?'ok':'warn'}">${lista.length ? '✔️' : '⚠️'} listar retornou ${lista.length} projeto(s)</p>`;
+    if(!lista.length){
+      html += `<p class="small">A planilha pode estar sem cabeçalho. Rode a função <code>setup()</code> no Apps Script (menu Executar) para criar as abas e cabeçalhos.</p>`;
+    }
+  }catch(e){
+    html += `<p class="pill err">❌ listar falhou: ${escapeHtml(e.message)}</p>`;
+  }
+
+  // Teste salvar
+  try{
+    const idTeste = "DIAG-" + Date.now();
+    const r = await sheetsRequest("salvar", {
+      id: idTeste, cliente:"DIAGNOSTICO", numero:"DIAG", data: new Date().toISOString().slice(0,10),
+      vendedor:"", ambientes:[], materiais:{}, composicoes:{}, params:{}
+    });
+    html += `<p class="pill ok">✔️ salvar OK (id=${escapeHtml(r.id)})</p>`;
+    try{
+      await sheetsRequest("excluir", { id: r.id });
+      html += `<p class="pill ok">✔️ registro de teste removido</p>`;
+    }catch(e2){
+      html += `<p class="small">⚠️ Não consegui remover o registro de teste (${escapeHtml(e2.message)}). Remova manualmente na planilha.</p>`;
+    }
+  }catch(e){
+    html += `<p class="pill err">❌ salvar falhou: ${escapeHtml(e.message)}</p>`;
+  }
+
+  box.innerHTML = html;
+}
+
+async function abrirListaNuvem(){
+  toast("Carregando…");
+  let lista = [];
+  try{
+    lista = await listarDoSheets();
+  }catch(e){
+    document.getElementById("modalRoot").innerHTML = `
+      <div class="modal-bg" onclick="if(event.target===this)fecharModal()">
+        <div class="modal">
+          <h2 style="color:var(--err)">❌ Erro ao conectar</h2>
+          <p><b>Mensagem:</b> ${escapeHtml(e.message)}</p>
+          <h3>Checklist</h3>
+          <ol class="small">
+            <li>Você rodou <code>setup()</code> no Apps Script? (menu Executar)</li>
+            <li>Fez <b>Nova versão</b> em Implantar → Gerenciar implantações?</li>
+            <li>A URL <code>SHEETS_API</code> no HTML é a atual?</li>
+            <li>"Quem tem acesso" está como <b>Qualquer pessoa</b>?</li>
+          </ol>
+          <button class="btn sec" onclick="fecharModal()">Fechar</button>
+          <button class="btn" onclick="fecharModal();diagnosticoNuvem()">🩺 Diagnóstico</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  if(!lista.length){
+    document.getElementById("modalRoot").innerHTML = `
+      <div class="modal-bg" onclick="if(event.target===this)fecharModal()">
+        <div class="modal">
+          <h2 style="color:var(--warn)">⚠️ Conectado, mas nenhum projeto retornado</h2>
+          <p>O servidor respondeu, mas não achou nenhum registro válido.</p>
+          <h3>Como resolver</h3>
+          <ol class="small">
+            <li>Abra a planilha <b>OrçaPro_DB</b>.</li>
+            <li>Verifique se a linha 1 da aba <b>orcamentos</b> tem exatamente:
+              <br><code style="font-size:10.5px">id | cliente | numero | data | vendedor | ambientes_json | materiais_json | composicoes_json | params_json | updated_at</code>
+            </li>
+            <li>Se estiver vazia ou diferente, rode no editor do Apps Script a função <code>setup()</code>.</li>
+            <li>Clique em <b>☁️ Salvar na Nuvem</b> no app. Abra a planilha — deve aparecer uma linha nova.</li>
+            <li>Se a linha aparecer mas o app ainda não listar, a coluna <b>A</b> (id) está vazia. Rode <code>setup()</code>.</li>
+          </ol>
+          <button class="btn sec" onclick="fecharModal()">Fechar</button>
+          <button class="btn" onclick="fecharModal();diagnosticoNuvem()">🩺 Diagnóstico</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  document.getElementById("modalRoot").innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)fecharModal()">
+      <div class="modal">
+        <div class="flex-between" style="margin-bottom:10px">
+          <h2 style="color:var(--acc2);margin:0">📂 Projetos na Nuvem (${lista.length})</h2>
+          <div class="row">
+            <button class="btn sec sm" onclick="fecharModal();salvarNoSheets()">⬆️ Salvar atual</button>
+            <button class="btn err sm" onclick="fecharModal()">✕</button>
+          </div>
+        </div>
         <table>
           <thead><tr><th>Nº</th><th>Cliente</th><th>Data</th><th>Atualizado</th><th></th></tr></thead>
           <tbody>${lista.map(p => `
@@ -833,7 +943,7 @@ async function abrirListaNuvem(){
               <td>${escapeHtml(p.numero||"-")}</td>
               <td>${escapeHtml(p.cliente||"-")}</td>
               <td>${p.data||"-"}</td>
-              <td class="small">${new Date(p.updated_at).toLocaleString("pt-BR")}</td>
+              <td class="small">${p.updated_at ? new Date(p.updated_at).toLocaleString("pt-BR") : "-"}</td>
               <td>
                 <button class="btn sm" onclick="fecharModal();carregarDoSheets('${p.id}')">Abrir</button>
                 <button class="btn err sm" onclick="excluirDoSheets('${p.id}')">Excluir</button>
@@ -841,10 +951,8 @@ async function abrirListaNuvem(){
             </tr>
           `).join("")}</tbody>
         </table>
-        <button class="btn sec" style="margin-top:10px" onclick="fecharModal()">Fechar</button>
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
 function atualizarStatusNuvem(status){
@@ -857,6 +965,167 @@ function atualizarStatusNuvem(status){
 }
 
 function fecharModal(){ document.getElementById("modalRoot").innerHTML = ""; }
+
+/* =====================================================================
+   DIVISOR AUTOMÁTICO DE VÃOS
+   ===================================================================== */
+function abrirDivisor(aid){
+  const amb = state.ambientes.find(a=>a.id===aid);
+  if(!amb){ toast("Ambiente não encontrado", true); return; }
+
+  const usada = (amb.vaos||[]).reduce((s,v)=>s+(+v.largura||0),0);
+  const livre = amb.largura - usada;
+
+  document.getElementById("modalRoot").innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)fecharModal()">
+      <div class="modal">
+        <h2 style="color:var(--acc2)">÷ Dividir Largura do Ambiente</h2>
+        <p class="small">
+          <b>${escapeHtml(amb.nome)}</b> — largura total <b>${amb.largura} mm</b><br>
+          Já usado: <b>${usada} mm</b> · Livre: <b>${livre} mm</b>
+        </p>
+
+        <div class="grid g3" style="margin-top:12px">
+          <div>
+            <label>Modo</label>
+            <select id="divModo" onchange="atualizarDivisor('${aid}')">
+              <option value="qtd">Por quantidade de vãos</option>
+              <option value="larg">Por largura de cada vão</option>
+            </select>
+          </div>
+          <div>
+            <label>Qtd de vãos</label>
+            <input type="number" id="divQtd" min="1" max="50" value="5" onchange="atualizarDivisor('${aid}')">
+          </div>
+          <div>
+            <label>Largura de cada (mm)</label>
+            <input type="number" id="divLarg" min="1" value="1000" onchange="atualizarDivisor('${aid}')">
+          </div>
+        </div>
+
+        <div class="grid g3" style="margin-top:12px">
+          <div>
+            <label>Tipo padrão dos vãos</label>
+            <select id="divTipo" onchange="atualizarDivisor('${aid}')">
+              ${Object.entries(TIPOS_VAO).map(([k,v])=>`<option value="${k}">${v.icone} ${v.nome}</option>`).join("")}
+            </select>
+          </div>
+          <div>
+            <label>Nº padrão (gavetas/portas)</label>
+            <input type="number" id="divN" min="1" value="1" onchange="atualizarDivisor('${aid}')">
+          </div>
+          <div>
+            <label>Descrição padrão</label>
+            <input id="divDesc" value="Módulo" onchange="atualizarDivisor('${aid}')">
+          </div>
+        </div>
+
+        <h3>Prévia</h3>
+        <div id="divPrevia" style="margin-top:8px"></div>
+
+        <div class="row" style="margin-top:14px;justify-content:flex-end">
+          <button class="btn sec" onclick="fecharModal()">Cancelar</button>
+          <button class="btn err" onclick="limparVaos('${aid}')">🗑️ Limpar vãos</button>
+          <button class="btn ok" onclick="aplicarDivisor('${aid}')">✔️ Aplicar divisão</button>
+        </div>
+      </div>
+    </div>`;
+
+  atualizarDivisor(aid);
+}
+
+function atualizarDivisor(aid){
+  const amb = state.ambientes.find(a=>a.id===aid);
+  if(!amb) return;
+  const usada = (amb.vaos||[]).reduce((s,v)=>s+(+v.largura||0),0);
+  const livre = amb.largura - usada;
+
+  const modo  = document.getElementById("divModo").value;
+  const qtd   = Math.max(1, +document.getElementById("divQtd").value || 1);
+  const larg  = Math.max(1, +document.getElementById("divLarg").value || 100);
+
+  let nV, lV, sobra;
+  if(modo === "qtd"){
+    nV = qtd;
+    lV = Math.floor(livre / nV);
+    sobra = livre - (lV * nV);
+  } else {
+    nV = Math.max(1, Math.floor(livre / larg));
+    lV = larg;
+    sobra = livre - (nV * larg);
+  }
+
+  const tipo = document.getElementById("divTipo").value;
+  const nPad = Math.max(1, +document.getElementById("divN").value || 1);
+  const desc = document.getElementById("divDesc").value || "Módulo";
+
+  let html = `<table><thead><tr><th>#</th><th>Descrição</th><th>Tipo</th><th style="text-align:right">Larg. (mm)</th><th style="text-align:right">Nº</th></tr></thead><tbody>`;
+  for(let i=0;i<nV;i++){
+    const w = (i === nV-1) ? (lV + sobra) : lV;
+    html += `<tr>
+      <td>${i+1}</td>
+      <td>${escapeHtml(desc)} ${i+1}</td>
+      <td>${TIPOS_VAO[tipo].icone} ${TIPOS_VAO[tipo].nome}</td>
+      <td style="text-align:right"><b>${w}</b></td>
+      <td style="text-align:right">${nPad}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>
+    <p class="small" style="margin-top:8px">
+      <b>${nV} vãos</b> de <b>${lV} mm</b>${sobra>0?` · o último vão terá <b>${lV+sobra} mm</b> (+${sobra}mm)`:""} ·
+      Total ocupado: <b>${nV*lV+sobra} mm</b> de <b>${livre} mm</b> livres
+    </p>`;
+
+  document.getElementById("divPrevia").innerHTML = html;
+}
+
+function aplicarDivisor(aid){
+  const amb = state.ambientes.find(a=>a.id===aid);
+  if(!amb) return;
+  const usada = (amb.vaos||[]).reduce((s,v)=>s+(+v.largura||0),0);
+  const livre = amb.largura - usada;
+
+  const modo = document.getElementById("divModo").value;
+  const qtd  = Math.max(1, +document.getElementById("divQtd").value || 1);
+  const larg = Math.max(1, +document.getElementById("divLarg").value || 100);
+
+  const tipo = document.getElementById("divTipo").value;
+  const nPad = Math.max(1, +document.getElementById("divN").value || 1);
+  const desc = document.getElementById("divDesc").value || "Módulo";
+
+  let nV, lV, sobra;
+  if(modo === "qtd"){
+    nV = qtd;
+    lV = Math.floor(livre / nV);
+    sobra = livre - (lV * nV);
+  } else {
+    nV = Math.max(1, Math.floor(livre / larg));
+    lV = larg;
+    sobra = livre - (nV * larg);
+  }
+
+  for(let i=0;i<nV;i++){
+    const w = (i === nV-1) ? (lV + sobra) : lV;
+    amb.vaos.push({
+      id: uid(),
+      tipo: tipo,
+      descricao: `${desc} ${i+1}`,
+      largura: w,
+      gavetasPortas: nPad
+    });
+  }
+  save(); render(); fecharModal();
+  toast(`✔️ ${nV} vãos criados`);
+}
+
+function limparVaos(aid){
+  if(!confirm("Remover TODOS os vãos deste ambiente?")) return;
+  const amb = state.ambientes.find(a=>a.id===aid);
+  if(!amb) return;
+  amb.vaos = [];
+  save(); render(); fecharModal();
+  toast("Vãos removidos");
+}
 
 /* =====================================================================
    RENDER
@@ -952,6 +1221,7 @@ function renderAmbientes(){
         </div>
         <div class="row no-print">
           <button class="btn sm" onclick="addVao('${a.id}')">+ Vão</button>
+          <button class="btn sm" onclick="abrirDivisor('${a.id}')">÷ Dividir</button>
           <button class="btn err sm" onclick="removeAmbiente('${a.id}')">✕</button>
         </div>
       </div>
@@ -961,7 +1231,7 @@ function renderAmbientes(){
         <div><label>Profundidade (mm)</label><input type="number" value="${a.profundidade}" onchange="setAmb('profundidade',+this.value,'${a.id}')"></div>
       </div>
       <div style="margin-top:10px">
-        ${(a.vaos||[]).map(v=>renderVao(a,v)).join("") || '<p class="small">Sem vãos.</p>'}
+        ${(a.vaos||[]).map(v=>renderVao(a,v)).join("") || '<p class="small">Sem vãos. Use "+ Vão" ou "÷ Dividir".</p>'}
       </div>
     </div>`;
   }).join("");
