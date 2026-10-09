@@ -109,48 +109,111 @@
   body.printing-compra   #tab-compra,
   body.printing-res      #tab-res { display: block !important; }
 
-  @  /* ===== CONTROLE DE IMPRESSÃO ===== */
+  /* ===== CONTROLE DE IMPRESSÃO ===== */
   @media print{
-    body{background:#fff;color:#000;font-size:11px}
-    header.top, .no-print, .tabs, .modal-bg, .toast, .tabs-inner { display:none !important }
-    main{padding:0;max-width:100%}
+    /* Zera tudo */
+    html, body{background:#fff !important;color:#000 !important;font-size:11px !important}
+    main{padding:0 !important;max-width:100% !important;margin:0 !important}
+
+    /* Esconde TUDO que é da interface do app */
+    header.top,
+    .tabs,
+    .no-print,
+    .modal-bg,
+    .toast,
+    .tabs-inner,
+    #nuvemStatus,
+    #templateStatus,
+    main > section > .card > .row.no-print,
+    main > section > .card > button.no-print,
+    main > section > .card > div > button.no-print {
+      display:none !important;
+      visibility:hidden !important;
+      height:0 !important;
+      overflow:hidden !important;
+    }
 
     /* Esconde TODAS as sections por padrão */
     main > section { display:none !important }
 
-    /* Mostra apenas a section alvo, com base na classe do body */
+    /* Mostra apenas a section alvo */
     body.printing-proposta main > #tab-proposta { display:block !important }
     body.printing-compra   main > #tab-compra   { display:block !important }
     body.printing-res      main > #tab-res      { display:block !important }
     body.printing-orc      main > #tab-orc      { display:block !important }
 
-    /* Se nenhuma classe foi aplicada, imprime a Proposta por padrão */
+    /* Se nenhuma classe foi aplicada, imprime a Proposta */
     body:not(.printing-proposta):not(.printing-compra):not(.printing-res):not(.printing-orc) main > #tab-proposta {
       display:block !important;
     }
 
-    /* Cabeçalho de impressão sempre visível */
+    /* ===== CABEÇALHO DE IMPRESSÃO ===== */
     .print-header{
       display:flex !important;
+      visibility:visible !important;
       align-items:center;
-      gap:14px;
-      margin-bottom:14px;
-      padding-bottom:10px;
+      flex-wrap:nowrap;
+      gap:12px;
+      margin:0 0 12px 0;
+      padding:0 0 8px 0;
       border-bottom:2px solid #222;
+      height:auto !important;
+      overflow:visible !important;
     }
-    .print-header img{height:60px;width:auto;background:#fff;object-fit:contain}
+    .print-header img{
+      height:52px;max-height:52px;width:auto;
+      flex-shrink:0;background:#fff;object-fit:contain;
+    }
+    .print-header .ph-txt{flex:0 0 auto;min-width:0}
+    .print-header .ph-txt h1{
+      margin:0;color:#000;letter-spacing:.2px;
+      white-space:nowrap;font-size:17px;line-height:1.1;
+    }
+    .print-header .ph-txt .ph-sub{white-space:nowrap;font-size:10px;color:#555}
+    .print-header .ph-info{
+      margin-left:auto;text-align:right;
+      font-size:10px;line-height:1.35;color:#333;
+    }
 
-    .card{background:#fff;box-shadow:none;border:1px solid #ccc;color:#000;
-      page-break-inside:avoid;margin-bottom:8px;border-radius:6px;padding:10px}
-    .card h2,.card h3{color:#000}
-    th{background:#eee;color:#000}
-    td,th{border-color:#999}
-    input,select,textarea{background:#fff;color:#000;border:none;padding:0}
-    .pill{background:#eee;color:#333;border:1px solid #ccc}
-    .tot{color:#000}
-    .kpi{background:#f8f8f8;border-left-color:#333}
-    .bar{background:#eee}
-    .bar > div{background:#333}
+    /* ===== CARDS ===== */
+    .card{
+      background:#fff !important;
+      box-shadow:none !important;
+      border:1px solid #ccc !important;
+      color:#000 !important;
+      page-break-inside:avoid;
+      margin-bottom:10px !important;
+      border-radius:6px;
+      padding:12px !important;
+      position:static !important;
+    }
+    .card h2{font-size:11px;margin:0 0 8px 0;color:#000 !important}
+    .card h3{font-size:10.5px;margin:10px 0 6px 0;color:#000 !important}
+
+    /* ===== TABELAS ===== */
+    table{font-size:10.5px;width:100%;border-collapse:collapse}
+    th,td{padding:4px 6px;border-color:#999}
+    th{background:#e8e8e8 !important;color:#000 !important;font-weight:700}
+    tr{page-break-inside:avoid}
+
+    /* ===== PILLS ===== */
+    .pill{
+      background:#eee !important;
+      color:#333 !important;
+      border:1px solid #ccc !important;
+      white-space:nowrap;
+      padding:1px 6px;
+      font-size:10px;
+      line-height:1.4;
+      display:inline-block;
+    }
+
+    /* ===== OUTROS ===== */
+    input,select,textarea{background:#fff !important;color:#000 !important;border:none !important;padding:0 !important}
+    .tot{color:#000 !important}
+    .kpi{background:#f8f8f8 !important;border-left-color:#333 !important;padding:8px}
+    .bar{background:#eee !important}
+    .bar > div{background:#333 !important}
   }
 </style>
 </head>
