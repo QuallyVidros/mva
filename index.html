@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>OrçaPro v2.3 · Móveis Planejados (Vidro/Alumínio/ACM)</title>
+<title>OrçaPro v2.4 · Móveis Planejados (Vidro/Alumínio/ACM)</title>
 <style>
   :root{
     --bg:#0b1220; --panel:#111a2e; --panel2:#152038; --line:#1e293b;
@@ -38,6 +38,7 @@
   .g2{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
   .g3{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
   .g4{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+  .g5{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
   label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px}
   input,select,textarea{width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);background:#0a1526;color:var(--txt);font-size:13px;font-family:inherit}
   input[type="checkbox"]{width:auto;padding:0}
@@ -52,6 +53,15 @@
   .pill.warn{background:#3a2a08;color:#ffd479}
   .pill.err{background:#3a1010;color:#ff9b9b}
   .pill.acc{background:#0e2240;color:#8ec7ff}
+  .pill.bronze{background:#5c3b1e;color:#e8b87b}
+  .pill.preto{background:#111;color:#ccc}
+  .pill.branco{background:#e5e7eb;color:#111}
+  .pill.champanhe{background:#d9cbb0;color:#5a4a2e}
+  .pill.fosco{background:#4b5563;color:#e5e7eb}
+  .pill.incolor{background:#cffafe;color:#0e7490}
+  .pill.cinza{background:#6b7280;color:#f3f4f6}
+  .pill.bege{background:#e7d9be;color:#4a3d22}
+  .pill.adefinir{background:#3f2a5c;color:#d6bcfa;border:1px dashed #a78bfa}
   .tot{font-size:22px;font-weight:800;color:var(--ok)}
   .small{font-size:11.5px;color:var(--muted)}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -98,7 +108,7 @@
 <body>
 
 <header class="top no-print">
-  <h1>🧰 <b>OrçaPro v2.3</b> · Móveis Planejados</h1>
+  <h1>🧰 <b>OrçaPro v2.4</b> · Móveis Planejados</h1>
   <span id="nuvemStatus" class="pill" style="font-size:11px">☁️ Offline</span>
   <span id="templateStatus" class="pill" style="font-size:11px">⚙️ —</span>
   <span class="sp"></span>
@@ -247,8 +257,13 @@
 
 <script>
 /* =====================================================================
-   OrçaPro v2.3 — Modelo de dados
+   OrçaPro v2.4 — Modelo de dados
    ===================================================================== */
+
+/* Cores disponíveis */
+const CORES_PERFIL = ["Bronze","Preto","Branco","Champanhe","Fosco","A definir"];
+const CORES_VIDRO  = ["Incolor","Preto","Branco","Champanhe","Cinza","Bege","A definir"];
+
 const TIPOS_VAO = {
   gaveta:        { nome:"Gaveta (vão)",       icone:"🗄️" },
   gaveta_dupla:  { nome:"Gaveta Dupla",        icone:"🗄️🗄️" },
@@ -256,7 +271,8 @@ const TIPOS_VAO = {
   lixeira:       { nome:"Lixeira",             icone:"🗑️" },
   nicho:         { nome:"Nicho",               icone:"📦" },
   porta_simples: { nome:"Porta Simples",       icone:"🚪" },
-  porta_dupla:   { nome:"Porta Dupla",         icone:"🚪🚪" }
+  porta_dupla:   { nome:"Porta Dupla",         icone:"🚪🚪" },
+  cristaleira:   { nome:"Cristaleira",         icone:"🍷" }
 };
 
 const COMP_DEFAULT = {
@@ -372,6 +388,33 @@ const COMP_DEFAULT = {
       perfil: { matId:"p_montante",  desc:0, orientacao:"L" },
       acess:  { matId:"a_suporte",   porPrateleira:2 }
     }
+  },
+  cristaleira: {
+    perfis: [
+      { matId:"p_montante", qtdFormula:"2", desc:0, orientacao:"A" },
+      { matId:"p_tubo5050", qtdFormula:"2", desc:0, orientacao:"L" },
+      { matId:"p_tubo2550", qtdFormula:"2", desc:0, orientacao:"P" },
+      { matId:"p_puxador",  qtdFormula:"2", desc:0, orientacao:"A" }
+    ],
+    vidros: [
+      { matId:"v_temperado", qtdFormula:"2", descL:"6", descA:"6", orientacao:"porta" }
+    ],
+    acm: [
+      { matId:"acm", qtdFormula:"1", descL:"0", descA:"0", rotulo:"Fundo",   orientacao:"LA" },
+      { matId:"acm", qtdFormula:"1", descL:"0", descA:"0", rotulo:"Lateral", orientacao:"PA" },
+      { matId:"acm", qtdFormula:"1", descL:"0", descA:"0", rotulo:"Lateral", orientacao:"PA" },
+      { matId:"acm", qtdFormula:"1", descL:"0", descA:"0", rotulo:"Base",    orientacao:"LP" }
+    ],
+    acess: [
+      { matId:"a_dobradica", qtdFormula:"4" },
+      { matId:"a_puxador",   qtdFormula:"2" }
+    ],
+    prateleiras: {
+      ativo:true, qtd:3,
+      vidro:  { matId:"v_temperado", descL:6, descA:6 },
+      perfil: { matId:"p_montante",  desc:0, orientacao:"L" },
+      acess:  { matId:"a_suporte",   porPrateleira:2 }
+    }
   }
 };
 
@@ -414,7 +457,7 @@ const PARAMS_DEFAULT = {
    ===================================================================== */
 let state = novoEstado();
 let hist = [];
-let templateNuvem = null;   // { savedAt, composicoes, materiais, params }
+let templateNuvem = null;
 
 function novoEstado(){
   return {
@@ -445,8 +488,8 @@ function normalizeState(s){
 function save(){
   try{
     state = normalizeState(state);
-    const payload = { v:3, savedAt:new Date().toISOString(), state };
-    localStorage.setItem("orcPro_v3", JSON.stringify(payload));
+    const payload = { v:4, savedAt:new Date().toISOString(), state };
+    localStorage.setItem("orcPro_v4", JSON.stringify(payload));
     if(typeof agendarSyncSheets === "function") agendarSyncSheets();
   }catch(e){
     console.error("Erro ao salvar:", e);
@@ -456,7 +499,9 @@ function save(){
 
 function load(){
   try{
-    const raw = localStorage.getItem("orcPro_v3") || localStorage.getItem("orcPro_v2");
+    const raw = localStorage.getItem("orcPro_v4")
+             || localStorage.getItem("orcPro_v3")
+             || localStorage.getItem("orcPro_v2");
     if(raw){
       const d = JSON.parse(raw);
       state = normalizeState(d.state || d);
@@ -498,6 +543,15 @@ function evalFormula(formula, vars){
     return isFinite(v) ? v : 0;
   }catch(e){ return 0; }
 }
+function corClass(cor){
+  if(!cor) return "pill";
+  return "pill " + cor.toLowerCase().replace(/[^a-z]/g,"");
+}
+function corPill(cor, prefixo){
+  if(!cor) cor = "A definir";
+  const cls = corClass(cor);
+  return `<span class="${cls}">${escapeHtml((prefixo||"") + cor)}</span>`;
+}
 
 /* =====================================================================
    CÁLCULO DE VÃO
@@ -512,6 +566,11 @@ function calcularVao(vao, movel){
   const M = 2;
   const vars = { L, A, P, N, M };
 
+  // Cores do vão (com fallback "A definir")
+  const corPerfil = vao.corPerfil || "A definir";
+  const corVidro  = vao.corVidro  || "A definir";
+  const corACM    = vao.corVidro  || "A definir"; // ACM usa a mesma cor de vidro (por padrão)
+
   const resultado = { perfis:[], vidros:[], acm:[], acess:{}, custo:{perfis:0,vidros:0,acm:0,acess:0,total:0} };
 
   // PERFIS
@@ -522,7 +581,7 @@ function calcularVao(vao, movel){
     for(let i=0;i<qtd;i++){
       let c = it.orientacao==="L" ? L : it.orientacao==="A" ? A : P;
       c = Math.max(0, Math.round(c - desc));
-      resultado.perfis.push({ matId:it.matId, comprimento:c, origem:"base" });
+      resultado.perfis.push({ matId:it.matId, comprimento:c, cor:corPerfil, origem:"base" });
     }
   });
 
@@ -546,11 +605,11 @@ function calcularVao(vao, movel){
       }
       larg = Math.max(0, Math.round(larg));
       alt  = Math.max(0, Math.round(alt));
-      if(larg>0 && alt>0) resultado.vidros.push({ matId:it.matId, largura:larg, altura:alt, rotulo:it.rotulo||"" });
+      if(larg>0 && alt>0) resultado.vidros.push({ matId:it.matId, largura:larg, altura:alt, cor:corVidro, rotulo:it.rotulo||"" });
     }
   });
 
-  // PRATELEIRAS (só se ativo no template E marcado no vão)
+  // PRATELEIRAS
   if(comp.prateleiras && comp.prateleiras.ativo && vao.temPrateleiras){
     const p = comp.prateleiras;
     const qtdPrat = Math.max(0, +vao.qtdPrateleiras || p.qtd || 0);
@@ -563,6 +622,7 @@ function calcularVao(vao, movel){
           resultado.vidros.push({
             matId: pv.matId || "v_temperado",
             largura: largVidro, altura: altVidro,
+            cor: corVidro,
             rotulo: "Prateleira " + (i+1)
           });
         }
@@ -571,7 +631,7 @@ function calcularVao(vao, movel){
       if(pp.matId){
         const compP = (pp.orientacao === "A" ? A : pp.orientacao === "P" ? P : L) - (+pp.desc || 0);
         for(let i=0;i<qtdPrat;i++){
-          resultado.perfis.push({ matId: pp.matId, comprimento: Math.max(0, Math.round(compP)), origem:"prateleira" });
+          resultado.perfis.push({ matId: pp.matId, comprimento: Math.max(0, Math.round(compP)), cor:corPerfil, origem:"prateleira" });
         }
       }
       const pa = p.acess || {};
@@ -598,7 +658,7 @@ function calcularVao(vao, movel){
       }
       larg = Math.max(0, Math.round(larg));
       alt  = Math.max(0, Math.round(alt));
-      if(larg>0 && alt>0) resultado.acm.push({ matId:it.matId, largura:larg, altura:alt, rotulo:it.rotulo||"" });
+      if(larg>0 && alt>0) resultado.acm.push({ matId:it.matId, largura:larg, altura:alt, cor:corACM, rotulo:it.rotulo||"" });
     }
   });
 
@@ -617,6 +677,8 @@ function calcularVao(vao, movel){
     const m = matById(k); if(m) resultado.custo.acess += (m.preco||0)*q;
   }
   resultado.custo.total = resultado.custo.perfis + resultado.custo.vidros + resultado.custo.acm + resultado.custo.acess;
+  resultado.corPerfil = corPerfil;
+  resultado.corVidro  = corVidro;
   return resultado;
 }
 
@@ -646,28 +708,44 @@ function calcularTudo(){
   g.corteACM    = cortarChapas(g.acm, state.params.chapaACM);
 
   const custo = { perfis:0, vidros:0, acm:0, acess:0 };
-  for(const matId in g.cortePerfis){
-    const r = g.cortePerfis[matId];
-    const m = matById(matId);
+  for(const chave in g.cortePerfis){
+    const r = g.cortePerfis[chave];
+    const m = matById(r.matId);
     custo.perfis += r.totalBarras * (m?.preco||0) * (state.params.barraPerfil/1000);
   }
   g.custoVidrosPorTipo = {};
-  const vidrosPorMat = {};
-  g.vidros.forEach(v=>{ (vidrosPorMat[v.matId] ||= []).push(v); });
-  for(const matId in vidrosPorMat){
-    const r = cortarChapas(vidrosPorMat[matId], state.params.chapaVidro);
+  const vidrosPorChave = {};
+  g.vidros.forEach(v=>{
+    const chave = v.matId + "|" + (v.cor||"A definir");
+    (vidrosPorChave[chave] ||= []).push(v);
+  });
+  for(const chave in vidrosPorChave){
+    const [matId, cor] = chave.split("|");
+    const r = cortarChapas(vidrosPorChave[chave], state.params.chapaVidro);
     const m = matById(matId);
-    g.custoVidrosPorTipo[matId] = { chapas:r.totalChapas, aproveitamento:r.aproveitamento, custo:r.totalChapas*(m?.preco||0), nome:m?.nome||matId };
-    custo.vidros += g.custoVidrosPorTipo[matId].custo;
+    g.custoVidrosPorTipo[chave] = {
+      chapas:r.totalChapas, aproveitamento:r.aproveitamento,
+      custo:r.totalChapas*(m?.preco||0),
+      nome:m?.nome||matId, cor:cor, matId:matId
+    };
+    custo.vidros += g.custoVidrosPorTipo[chave].custo;
   }
   g.custoACMPorTipo = {};
-  const acmPorMat = {};
-  g.acm.forEach(v=>{ (acmPorMat[v.matId] ||= []).push(v); });
-  for(const matId in acmPorMat){
-    const r = cortarChapas(acmPorMat[matId], state.params.chapaACM);
+  const acmPorChave = {};
+  g.acm.forEach(v=>{
+    const chave = v.matId + "|" + (v.cor||"A definir");
+    (acmPorChave[chave] ||= []).push(v);
+  });
+  for(const chave in acmPorChave){
+    const [matId, cor] = chave.split("|");
+    const r = cortarChapas(acmPorChave[chave], state.params.chapaACM);
     const m = matById(matId);
-    g.custoACMPorTipo[matId] = { chapas:r.totalChapas, aproveitamento:r.aproveitamento, custo:r.totalChapas*(m?.preco||0), nome:m?.nome||matId };
-    custo.acm += g.custoACMPorTipo[matId].custo;
+    g.custoACMPorTipo[chave] = {
+      chapas:r.totalChapas, aproveitamento:r.aproveitamento,
+      custo:r.totalChapas*(m?.preco||0),
+      nome:m?.nome||matId, cor:cor, matId:matId
+    };
+    custo.acm += g.custoACMPorTipo[chave].custo;
   }
   for(const k in g.acess){
     const m = matById(k);
@@ -694,12 +772,16 @@ function calcularTudo(){
    CORTE
    ===================================================================== */
 function cortarPerfis(pecas){
-  const porMat = {};
-  pecas.forEach(p=>{ (porMat[p.matId] ||= []).push(p.comprimento); });
+  const porChave = {};
+  pecas.forEach(p=>{
+    const chave = p.matId + "|" + (p.cor||"A definir");
+    (porChave[chave] ||= []).push(p.comprimento);
+  });
   const resultado = {};
   const barra = state.params.barraPerfil;
-  for(const matId in porMat){
-    const comp = porMat[matId].slice().sort((a,b)=>b-a);
+  for(const chave in porChave){
+    const [matId, cor] = chave.split("|");
+    const comp = porChave[chave].slice().sort((a,b)=>b-a);
     const barras = [];
     comp.forEach(c=>{
       let ok=false;
@@ -707,11 +789,12 @@ function cortarPerfis(pecas){
       if(!ok) barras.push({ itens:[c], restante: barra - c });
     });
     const total = comp.reduce((a,b)=>a+b,0);
-    resultado[matId] = {
+    resultado[chave] = {
       barras, totalPecas: comp.length, totalUsado: total,
       totalBarras: barras.length, metrosLineares: total/1000,
       aproveitamento: barras.length ? (total/(barras.length*barra)*100) : 0,
-      nome: matById(matId)?.nome || matId
+      nome: (matById(matId)?.nome || matId) + " — " + cor,
+      cor:cor, matId:matId
     };
   }
   return resultado;
@@ -887,7 +970,6 @@ async function diagnosticoNuvem(){
     </div>`;
   const box = document.getElementById("diagBox");
   let html = `<p><b>URL:</b><br><code style="font-size:11px">${escapeHtml(SHEETS_API)}</code></p>`;
-
   try{
     const t0 = Date.now();
     await sheetsRequest("ping");
@@ -977,7 +1059,7 @@ function atualizarStatusNuvem(status){
 function fecharModal(){ document.getElementById("modalRoot").innerHTML = ""; }
 
 /* =====================================================================
-   TEMPLATE — salvar/como padrão na nuvem
+   TEMPLATE
    ===================================================================== */
 async function salvarComoTemplate(){
   try{
@@ -992,9 +1074,7 @@ async function salvarComoTemplate(){
     templateNuvem = tpl;
     atualizarStatusTemplate();
     toast("✔️ Padrão salvo na nuvem!");
-  }catch(e){
-    toast("Erro: " + e.message, true);
-  }
+  }catch(e){ toast("Erro: " + e.message, true); }
 }
 
 async function carregarTemplateDaNuvem(){
@@ -1010,13 +1090,11 @@ async function carregarTemplateDaNuvem(){
     save(); render();
     atualizarStatusTemplate();
     toast("✔️ Padrão carregado da nuvem!");
-  }catch(e){
-    toast("Erro: " + e.message, true);
-  }
+  }catch(e){ toast("Erro: " + e.message, true); }
 }
 
 function restaurarFabrica(){
-  if(!confirm("Restaurar composições de fábrica? Isso apaga as personalizações atuais (você precisará salvar novamente para atualizar a nuvem).")) return;
+  if(!confirm("Restaurar composições de fábrica?")) return;
   state.composicoes = JSON.parse(JSON.stringify(COMP_DEFAULT));
   state.materiais   = JSON.parse(JSON.stringify(MAT_DEFAULT));
   state.params      = JSON.parse(JSON.stringify(PARAMS_DEFAULT));
@@ -1036,16 +1114,15 @@ function atualizarStatusTemplate(){
   }
 }
 
-// Auto-carrega template no início
 async function carregarTemplateInicial(){
   try{
     const r = await sheetsRequest("carregarTemplate");
     if(r.template){ templateNuvem = r.template; atualizarStatusTemplate(); }
-  }catch(e){ /* offline */ }
+  }catch(e){ }
 }
 
 /* =====================================================================
-   DIVISOR DE VÃOS
+   DIVISOR
    ===================================================================== */
 function abrirDivisor(aid){
   const amb = state.ambientes.find(a=>a.id===aid);
@@ -1061,8 +1138,8 @@ function abrirDivisor(aid){
         <div class="grid g3" style="margin-top:12px">
           <div><label>Modo</label>
             <select id="divModo" onchange="atualizarDivisor('${aid}')">
-              <option value="qtd">Por quantidade de vãos</option>
-              <option value="larg">Por largura de cada vão</option>
+              <option value="qtd">Por quantidade</option>
+              <option value="larg">Por largura</option>
             </select>
           </div>
           <div><label>Qtd de vãos</label><input type="number" id="divQtd" min="1" max="50" value="5" onchange="atualizarDivisor('${aid}')"></div>
@@ -1076,6 +1153,14 @@ function abrirDivisor(aid){
           </div>
           <div><label>Nº padrão</label><input type="number" id="divN" min="1" value="1" onchange="atualizarDivisor('${aid}')"></div>
           <div><label>Descrição</label><input id="divDesc" value="Módulo" onchange="atualizarDivisor('${aid}')"></div>
+        </div>
+        <div class="grid g3" style="margin-top:12px">
+          <div><label>Cor perfil</label>
+            <select id="divCorPerfil">${CORES_PERFIL.map(c=>`<option value="${c}" ${c==="A definir"?"selected":""}>${c}</option>`).join("")}</select>
+          </div>
+          <div><label>Cor vidro/ACM</label>
+            <select id="divCorVidro">${CORES_VIDRO.map(c=>`<option value="${c}" ${c==="A definir"?"selected":""}>${c}</option>`).join("")}</select>
+          </div>
         </div>
         <h3>Prévia</h3>
         <div id="divPrevia"></div>
@@ -1103,17 +1188,20 @@ function atualizarDivisor(aid){
   const tipo = document.getElementById("divTipo").value;
   const nPad = Math.max(1, +document.getElementById("divN").value || 1);
   const desc = document.getElementById("divDesc").value || "Módulo";
+  const cp = document.getElementById("divCorPerfil").value;
+  const cv = document.getElementById("divCorVidro").value;
 
-  let html = `<table><thead><tr><th>#</th><th>Descrição</th><th>Tipo</th><th style="text-align:right">Larg. (mm)</th><th style="text-align:right">Nº</th></tr></thead><tbody>`;
+  let html = `<table><thead><tr><th>#</th><th>Descrição</th><th>Tipo</th><th style="text-align:right">Larg. (mm)</th><th style="text-align:right">Nº</th><th>Cores</th></tr></thead><tbody>`;
   for(let i=0;i<nV;i++){
     const w = (i === nV-1) ? (lV + sobra) : lV;
     html += `<tr><td>${i+1}</td><td>${escapeHtml(desc)} ${i+1}</td>
       <td>${TIPOS_VAO[tipo].icone} ${TIPOS_VAO[tipo].nome}</td>
       <td style="text-align:right"><b>${w}</b></td>
-      <td style="text-align:right">${nPad}</td></tr>`;
+      <td style="text-align:right">${nPad}</td>
+      <td>${corPill(cp,"")} ${corPill(cv,"")}</td></tr>`;
   }
   html += `</tbody></table>
-    <p class="small" style="margin-top:8px"><b>${nV} vãos</b> de <b>${lV} mm</b>${sobra>0?` · último: <b>${lV+sobra} mm</b> (+${sobra}mm)`:""} · Total <b>${nV*lV+sobra} mm</b></p>`;
+    <p class="small" style="margin-top:8px"><b>${nV} vãos</b> de <b>${lV} mm</b>${sobra>0?` · último: <b>${lV+sobra} mm</b> (+${sobra}mm)`:""}</p>`;
   document.getElementById("divPrevia").innerHTML = html;
 }
 
@@ -1128,6 +1216,8 @@ function aplicarDivisor(aid){
   const tipo = document.getElementById("divTipo").value;
   const nPad = Math.max(1, +document.getElementById("divN").value || 1);
   const desc = document.getElementById("divDesc").value || "Módulo";
+  const cp = document.getElementById("divCorPerfil").value;
+  const cv = document.getElementById("divCorVidro").value;
   let nV, lV, sobra;
   if(modo === "qtd"){ nV = qtd; lV = Math.floor(livre/nV); sobra = livre - lV*nV; }
   else              { nV = Math.max(1, Math.floor(livre/larg)); lV = larg; sobra = livre - nV*larg; }
@@ -1137,7 +1227,8 @@ function aplicarDivisor(aid){
     amb.vaos.push({
       id: uid(), tipo, descricao: `${desc} ${i+1}`,
       largura: w, gavetasPortas: nPad,
-      temPrateleiras: false, qtdPrateleiras: 0
+      temPrateleiras: false, qtdPrateleiras: 0,
+      corPerfil: cp, corVidro: cv
     });
   }
   save(); render(); fecharModal();
@@ -1187,7 +1278,6 @@ function render(){
   renderHistorico();
   atualizarStatusTemplate();
 
-  // Segurança input file
   document.querySelectorAll('input[type="file"]').forEach(el => { el.value = ""; });
 }
 
@@ -1213,7 +1303,12 @@ function addVao(aid){
   const amb = state.ambientes.find(a=>a.id===aid);
   const usada = (amb.vaos||[]).reduce((s,v)=>s+(+v.largura||0),0);
   if(usada + 500 > amb.largura){ toast("Largura excede o ambiente", true); return; }
-  amb.vaos.push({ id:uid(), tipo:"porta_simples", descricao:"Módulo", largura:500, gavetasPortas:1, temPrateleiras:false, qtdPrateleiras:0 });
+  amb.vaos.push({
+    id:uid(), tipo:"porta_simples", descricao:"Módulo",
+    largura:500, gavetasPortas:1,
+    temPrateleiras:false, qtdPrateleiras:0,
+    corPerfil:"A definir", corVidro:"A definir"
+  });
   save(); render();
 }
 
@@ -1270,9 +1365,11 @@ function renderAmbientes(){
 function renderVao(a, v){
   const t = TIPOS_VAO[v.tipo];
   const gav = (v.tipo==="gaveta"||v.tipo==="gaveta_dupla");
-  const portas = (v.tipo==="porta_simples"||v.tipo==="porta_dupla"||v.tipo==="porta_tempero");
+  const portas = (v.tipo==="porta_simples"||v.tipo==="porta_dupla"||v.tipo==="porta_tempero"||v.tipo==="cristaleira");
   const comp = state.composicoes[v.tipo];
   const temPrat = !!(comp && comp.prateleiras && comp.prateleiras.ativo);
+  const corP = v.corPerfil || "A definir";
+  const corV = v.corVidro  || "A definir";
 
   return `
   <div class="vao">
@@ -1282,8 +1379,10 @@ function renderVao(a, v){
         <input value="${escapeHtml(v.descricao||'')}" onchange="upVao('${a.id}','${v.id}','descricao',this.value)" style="width:160px" placeholder="Descrição">
         <span class="pill">L ${v.largura}mm</span>
         ${gav? `<span class="pill">${v.gavetasPortas} gaveta(s)</span>`:""}
-        ${portas && !temPrat ? `<span class="pill">${v.gavetasPortas} porta(s)</span>`:""}
+        ${portas && !gav ? `<span class="pill">${v.gavetasPortas} porta(s)</span>`:""}
         ${temPrat && v.temPrateleiras ? `<span class="pill ok">📚 ${v.qtdPrateleiras||0} prat.</span>`:""}
+        ${corPill(corP, "🔩 ")}
+        ${corPill(corV, "🪟 ")}
         <span class="pill ok">${fmt(v._custo?.total||0)}</span>
       </div>
       <button class="btn err xs no-print" onclick="removeVao('${a.id}','${v.id}')">✕</button>
@@ -1297,6 +1396,16 @@ function renderVao(a, v){
       <div><label>Largura vão (mm)</label><input type="number" value="${v.largura}" onchange="upVao('${a.id}','${v.id}','largura',+this.value)"></div>
       <div><label>${gav?"Nº gavetas":portas?"Nº portas":"Nº itens"}</label>
         <input type="number" min="1" value="${v.gavetasPortas||1}" onchange="upVao('${a.id}','${v.id}','gavetasPortas',+this.value)">
+      </div>
+      <div><label>Cor do perfil</label>
+        <select onchange="upVao('${a.id}','${v.id}','corPerfil',this.value)">
+          ${CORES_PERFIL.map(c=>`<option value="${c}" ${corP===c?"selected":""}>${c}</option>`).join("")}
+        </select>
+      </div>
+      <div><label>Cor do vidro/ACM</label>
+        <select onchange="upVao('${a.id}','${v.id}','corVidro',this.value)">
+          ${CORES_VIDRO.map(c=>`<option value="${c}" ${corV===c?"selected":""}>${c}</option>`).join("")}
+        </select>
       </div>
     </div>
     ${temPrat ? `
@@ -1388,7 +1497,6 @@ function renderCompTabela(tipoVao, cat, itens){
           </div>
           <div><label>Suportes por prateleira</label><input type="number" min="0" value="${p.acess?.porPrateleira||2}" onchange="setPrat('${tipoVao}','acess.porPrateleira',+this.value)"></div>
         </div>
-        <p class="small" style="margin-top:8px">💡 O vidro da prateleira usa <b>largura × profundidade</b> do vão, com os descontos acima. Cada prateleira consome 1 perfil + N suportes.</p>
       </div>`;
   }
 
@@ -1477,7 +1585,6 @@ function addItemComp(){
   state.composicoes[t][cat].push(def); save(); render();
 }
 
-// Definir valores aninhados tipo "vidro.matId"
 function setPrat(tipoVao, path, val){
   const p = state.composicoes[tipoVao].prateleiras;
   const parts = path.split(".");
@@ -1559,13 +1666,14 @@ function renderResultado(g){
       <div style="margin-bottom:16px">
         <p style="margin:0 0 6px 0"><b>🏠 ${escapeHtml(a.nome)}</b> — <span class="pill ok">${fmt(t.total)}</span></p>
         <table>
-          <thead><tr><th>Módulo</th><th>Tipo</th><th style="text-align:right">Perfis</th><th style="text-align:right">Vidros</th><th style="text-align:right">ACM</th><th style="text-align:right">Acess.</th><th style="text-align:right">Total</th></tr></thead>
+          <thead><tr><th>Módulo</th><th>Tipo</th><th>Cores</th><th style="text-align:right">Perfis</th><th style="text-align:right">Vidros</th><th style="text-align:right">ACM</th><th style="text-align:right">Acess.</th><th style="text-align:right">Total</th></tr></thead>
           <tbody>${(a.vaos||[]).map(v=>{
             const c = v._custo || {perfis:0,vidros:0,acm:0,acess:0,total:0};
             const prat = v.temPrateleiras ? ` <span class="pill ok">📚${v.qtdPrateleiras||0}</span>` : "";
             return `<tr>
               <td>${escapeHtml(v.descricao||"-")} <span class="small">(${v.largura}mm)</span>${prat}</td>
               <td>${TIPOS_VAO[v.tipo].nome}</td>
+              <td class="small">${corPill(v.corPerfil||"A definir","🔩 ")} ${corPill(v.corVidro||"A definir","🪟 ")}</td>
               <td style="text-align:right">${fmt(c.perfis)}</td>
               <td style="text-align:right">${fmt(c.vidros)}</td>
               <td style="text-align:right">${fmt(c.acm)}</td>
@@ -1578,11 +1686,11 @@ function renderResultado(g){
   }).join("") || '<p class="small">Sem dados.</p>';
 
   document.getElementById("cortePerfis").innerHTML = Object.keys(g.cortePerfis).length ?
-    Object.entries(g.cortePerfis).map(([matId,r])=>`
+    Object.entries(g.cortePerfis).map(([chave,r])=>`
       <div style="margin-bottom:14px">
         <p><b>${escapeHtml(r.nome)}</b> — ${r.totalBarras} barra(s) de ${state.params.barraPerfil}mm · ${r.totalPecas} peças · ${fmtN(r.metrosLineares)}m</p>
         <div class="bar"><div style="width:${r.aproveitamento.toFixed(0)}%"></div></div>
-        <p class="small">Aproveitamento ${fmtN(r.aproveitamento,1)}%</p>
+        <p class="small">Aproveitamento ${fmtN(r.aproveitamento,1)}% · ${corPill(r.cor,"Cor: ")}</p>
         <table><thead><tr><th>Barra</th><th>Cortes (mm)</th><th style="text-align:right">Sobra</th></tr></thead>
         <tbody>${r.barras.map((b,i)=>`<tr><td>#${i+1}</td><td>${b.itens.join(" + ")}</td><td style="text-align:right">${b.restante}mm</td></tr>`).join("")}</tbody></table>
       </div>`).join("") : '<p class="small">Nenhum perfil.</p>';
@@ -1590,13 +1698,13 @@ function renderResultado(g){
   document.getElementById("corteVidros").innerHTML = g.corteVidros.totalPecas ?
     `<p>Total: <b>${g.corteVidros.totalChapas}</b> chapa(s) ${state.params.chapaVidro.w}×${state.params.chapaVidro.h}mm · ${g.corteVidros.totalPecas} peças · aprox. ${fmtN(g.corteVidros.aproveitamento,1)}%</p>
      ${renderChapas(g.corteVidros, "Vidro")}
-     ${Object.values(g.custoVidrosPorTipo).map(v=>`<p class="small">▸ ${escapeHtml(v.nome)}: ${v.chapas} chapa(s) — ${fmt(v.custo)}</p>`).join("")}
+     ${Object.values(g.custoVidrosPorTipo).map(v=>`<p class="small">▸ ${escapeHtml(v.nome)} ${corPill(v.cor,"Cor: ")}: ${v.chapas} chapa(s) — ${fmt(v.custo)}</p>`).join("")}
     ` : '<p class="small">Nenhum vidro.</p>';
 
   document.getElementById("corteACM").innerHTML = g.corteACM.totalPecas ?
     `<p>Total: <b>${g.corteACM.totalChapas}</b> chapa(s) ${state.params.chapaACM.w}×${state.params.chapaACM.h}mm · ${g.corteACM.totalPecas} peças · aprox. ${fmtN(g.corteACM.aproveitamento,1)}%</p>
      ${renderChapas(g.corteACM, "ACM")}
-     ${Object.values(g.custoACMPorTipo).map(v=>`<p class="small">▸ ${escapeHtml(v.nome)}: ${v.chapas} chapa(s) — ${fmt(v.custo)}</p>`).join("")}
+     ${Object.values(g.custoACMPorTipo).map(v=>`<p class="small">▸ ${escapeHtml(v.nome)} ${corPill(v.cor,"Cor: ")}: ${v.chapas} chapa(s) — ${fmt(v.custo)}</p>`).join("")}
     ` : '<p class="small">Nenhum ACM.</p>';
 
   const acess = Object.entries(g.acess);
@@ -1614,10 +1722,11 @@ function renderChapas(corte, titulo){
   return corte.chapas.map((ch,i)=>`
     <div style="margin-bottom:12px">
       <p class="small"><b>${titulo} — Chapa #${i+1}</b> · ${ch.itens.length} peça(s)</p>
-      <table><thead><tr><th>Peça (mm)</th><th>Posição</th><th>Rótulo</th></tr></thead>
+      <table><thead><tr><th>Peça (mm)</th><th>Posição</th><th>Cor</th><th>Rótulo</th></tr></thead>
         <tbody>${ch.itens.map(it=>`<tr>
           <td>${it.w} × ${it.h} ${it.aviso?`<span class="pill err">${it.aviso}</span>`:""}</td>
           <td>(${it.x||0}, ${it.y||0})</td>
+          <td class="small">${it.cor?corPill(it.cor,""):"-"}</td>
           <td class="small">${escapeHtml(it.rotulo||"")}</td>
         </tr>`).join("")}</tbody>
       </table>
@@ -1647,14 +1756,32 @@ function renderProposta(g){
       </table>
       <h3 style="color:var(--acc2)">Itens do Projeto</h3>
       <table>
-        <thead><tr><th>Ambiente</th><th>Módulo</th><th style="text-align:right">Larg.</th><th>Tipo</th><th style="text-align:right">Valor</th></tr></thead>
+        <thead><tr><th>Ambiente</th><th>Módulo</th><th style="text-align:right">Larg.</th><th>Tipo</th><th>Cores</th><th style="text-align:right">Valor</th></tr></thead>
         <tbody>${state.ambientes.map(a=>(a.vaos||[]).map(v=>`<tr>
             <td>${escapeHtml(a.nome)}</td>
             <td>${escapeHtml(v.descricao||"-")}${v.temPrateleiras?` 📚${v.qtdPrateleiras||0}`:""}</td>
             <td style="text-align:right">${v.largura}mm</td>
             <td>${TIPOS_VAO[v.tipo].nome}</td>
+            <td class="small">${corPill(v.corPerfil||"A definir","🔩 ")} ${corPill(v.corVidro||"A definir","🪟 ")}</td>
             <td style="text-align:right">${fmt(v._custo?.total||0)}</td>
           </tr>`).join("")).join("")}</tbody>
+      </table>
+      <h3 style="color:var(--acc2)">Cores Aplicadas</h3>
+      <table>
+        <thead><tr><th>Cor do Perfil</th><th>Cor do Vidro / ACM</th><th style="text-align:right">Qtd de vãos</th></tr></thead>
+        <tbody>
+          ${(() => {
+            const grupo = {};
+            state.ambientes.forEach(a => (a.vaos||[]).forEach(v => {
+              const k = (v.corPerfil||"A definir") + "|" + (v.corVidro||"A definir");
+              grupo[k] = (grupo[k]||0)+1;
+            }));
+            return Object.entries(grupo).map(([k,q])=>{
+              const [cp,cv] = k.split("|");
+              return `<tr><td>${corPill(cp,"")}</td><td>${corPill(cv,"")}</td><td style="text-align:right">${q}</td></tr>`;
+            }).join("");
+          })()}
+        </tbody>
       </table>
       <h3 style="color:var(--acc2)">Resumo Financeiro</h3>
       <table>
@@ -1678,28 +1805,29 @@ function renderProposta(g){
    ===================================================================== */
 function renderCompra(g){
   const linhas = [];
-  for(const matId in g.cortePerfis){
-    const r = g.cortePerfis[matId];
-    linhas.push({ cat:"Perfil", desc:`${r.nome} — barra ${state.params.barraPerfil}mm`, qtd:r.totalBarras, un:"barra", obs:`${fmtN(r.metrosLineares)}m` });
+  for(const chave in g.cortePerfis){
+    const r = g.cortePerfis[chave];
+    linhas.push({ cat:"Perfil", desc:`${matById(r.matId)?.nome||r.matId} — barra ${state.params.barraPerfil}mm`, cor:r.cor, qtd:r.totalBarras, un:"barra", obs:`${fmtN(r.metrosLineares)}m` });
   }
-  for(const matId in g.custoVidrosPorTipo){
-    const v = g.custoVidrosPorTipo[matId];
-    linhas.push({ cat:"Vidro", desc:`${v.nome} — chapa ${state.params.chapaVidro.w}×${state.params.chapaVidro.h}mm`, qtd:v.chapas, un:"chapa", obs:`Aprov. ${fmtN(v.aproveitamento,1)}%` });
+  for(const chave in g.custoVidrosPorTipo){
+    const v = g.custoVidrosPorTipo[chave];
+    linhas.push({ cat:"Vidro", desc:`${v.nome} — chapa ${state.params.chapaVidro.w}×${state.params.chapaVidro.h}mm`, cor:v.cor, qtd:v.chapas, un:"chapa", obs:`Aprov. ${fmtN(v.aproveitamento,1)}%` });
   }
-  for(const matId in g.custoACMPorTipo){
-    const v = g.custoACMPorTipo[matId];
-    linhas.push({ cat:"ACM", desc:`${v.nome} — chapa ${state.params.chapaACM.w}×${state.params.chapaACM.h}mm`, qtd:v.chapas, un:"chapa", obs:`Aprov. ${fmtN(v.aproveitamento,1)}%` });
+  for(const chave in g.custoACMPorTipo){
+    const v = g.custoACMPorTipo[chave];
+    linhas.push({ cat:"ACM", desc:`${v.nome} — chapa ${state.params.chapaACM.w}×${state.params.chapaACM.h}mm`, cor:v.cor, qtd:v.chapas, un:"chapa", obs:`Aprov. ${fmtN(v.aproveitamento,1)}%` });
   }
   for(const k in g.acess){
     const m = matById(k);
-    linhas.push({ cat:"Acessório", desc:m?.nome||k, qtd:g.acess[k], un:"un", obs:"" });
+    linhas.push({ cat:"Acessório", desc:m?.nome||k, cor:"-", qtd:g.acess[k], un:"un", obs:"" });
   }
   document.getElementById("listaCompra").innerHTML = linhas.length ?
     `<table>
-      <thead><tr><th>Cat.</th><th>Descrição</th><th style="text-align:right">Qtd</th><th>Un.</th><th>Obs.</th></tr></thead>
+      <thead><tr><th>Cat.</th><th>Descrição</th><th>Cor</th><th style="text-align:right">Qtd</th><th>Un.</th><th>Obs.</th></tr></thead>
       <tbody>${linhas.map(l=>`<tr>
         <td><span class="pill">${l.cat}</span></td>
         <td>${escapeHtml(l.desc)}</td>
+        <td>${l.cor && l.cor!=="-"?corPill(l.cor,""):"-"}</td>
         <td style="text-align:right"><b>${l.qtd}</b></td>
         <td>${l.un}</td>
         <td class="small">${escapeHtml(l.obs)}</td>
@@ -1710,8 +1838,8 @@ function renderCompra(g){
 function exportCSV(){
   const linhas = window._compraLinhas || [];
   if(!linhas.length){ toast("Nada para exportar", true); return; }
-  const csv = ["Categoria;Descrição;Qtd;Unidade;Observação",
-    ...linhas.map(l=>`${l.cat};${l.desc.replace(/;/g,",")};${l.qtd};${l.un};${l.obs}`)].join("\n");
+  const csv = ["Categoria;Descrição;Cor;Qtd;Unidade;Observação",
+    ...linhas.map(l=>`${l.cat};${l.desc.replace(/;/g,",")};${l.cor||"-"};${l.qtd};${l.un};${l.obs}`)].join("\n");
   const blob = new Blob(["\ufeff"+csv], {type:"text/csv;charset=utf-8"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -1730,7 +1858,6 @@ function salvarOrcamento(){
 }
 function novoOrcamento(){
   if(!confirm("Limpar o orçamento atual? Suas composições e materiais personalizados serão mantidos.")) return;
-  // Preserva composições, materiais e params
   const composicoes = JSON.parse(JSON.stringify(state.composicoes));
   const materiais   = JSON.parse(JSON.stringify(state.materiais));
   const params      = JSON.parse(JSON.stringify(state.params));
@@ -1783,6 +1910,7 @@ function importJSON(e){
 }
 function resetAll(){
   if(!confirm("Zerar TUDO? (inclui histórico local)")) return;
+  localStorage.removeItem("orcPro_v4");
   localStorage.removeItem("orcPro_v3");
   localStorage.removeItem("orcPro_v2");
   localStorage.removeItem("orcPro_hist");
@@ -1811,8 +1939,8 @@ if(!state.ambientes.length){
   state.ambientes.push({
     id:uid(), nome:"Cozinha Exemplo", largura:5000, altura:800, profundidade:500,
     vaos:[
-      { id:uid(), tipo:"gaveta", descricao:"Gaveteiro 3G", largura:500, gavetasPortas:3, temPrateleiras:false, qtdPrateleiras:0 },
-      { id:uid(), tipo:"porta_dupla", descricao:"Armário Aéreo", largura:800, gavetasPortas:2, temPrateleiras:false, qtdPrateleiras:0 }
+      { id:uid(), tipo:"gaveta", descricao:"Gaveteiro 3G", largura:500, gavetasPortas:3, temPrateleiras:false, qtdPrateleiras:0, corPerfil:"Branco", corVidro:"Incolor" },
+      { id:uid(), tipo:"cristaleira", descricao:"Cristaleira", largura:800, gavetasPortas:2, temPrateleiras:true, qtdPrateleiras:3, corPerfil:"Branco", corVidro:"Incolor" }
     ]
   });
   state.orcamento.numero = "ORC-001";
