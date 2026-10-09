@@ -3,7 +3,13 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>OrçaPro v2.4 · Móveis Planejados (Vidro/Alumínio/ACM)</title>
+<title>OrçaProQually · Móveis Planejados</title>
+
+<!-- ===== FAVICON ===== -->
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="shortcut icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="favicon.png">
+
 <style>
   :root{
     --bg:#0b1220; --panel:#111a2e; --panel2:#152038; --line:#1e293b;
@@ -18,7 +24,8 @@
     position:sticky;top:0;z-index:50;background:linear-gradient(90deg,#0b1220,#152038);
     padding:10px 18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line);
   }
-  header.top h1{font-size:15px;margin:0;letter-spacing:.4px}
+  header.top h1{font-size:15px;margin:0;letter-spacing:.4px;display:flex;align-items:center;gap:10px}
+  header.top h1 img{height:26px;width:auto;border-radius:4px;background:#fff;padding:2px}
   header.top h1 b{color:var(--acc2)}
   header.top .sp{flex:1}
   .btn{cursor:pointer;border:none;border-radius:8px;padding:8px 12px;font-weight:600;background:var(--acc);color:#fff;font-size:13px;transition:.15s}
@@ -38,7 +45,6 @@
   .g2{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
   .g3{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
   .g4{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
-  .g5{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
   label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px}
   input,select,textarea{width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);background:#0a1526;color:var(--txt);font-size:13px;font-family:inherit}
   input[type="checkbox"]{width:auto;padding:0}
@@ -90,25 +96,38 @@
   .tabs-inner .tab.on{background:var(--acc2);color:#04121f}
   .subcard{background:var(--panel2);border-radius:10px;padding:12px;border-left:3px solid var(--acc2)}
 
+  /* ===== LOGO / PRINT HEADER ===== */
+  .print-header{display:none;align-items:center;gap:14px;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #222}
+  .print-header img{height:60px;width:auto}
+  .print-header .ph-txt{flex:1}
+  .print-header .ph-txt h1{margin:0;font-size:20px;color:#000;letter-spacing:.3px}
+  .print-header .ph-txt .ph-sub{font-size:12px;color:#555}
+  .print-header .ph-info{text-align:right;font-size:12px;color:#333;line-height:1.4}
+
   @media print{
     body{background:#fff;color:#000;font-size:11px}
-    header.top,.no-print,.tabs,.modal-bg,.toast{display:none !important}
+    header.top,.no-print,.tabs,.modal-bg,.toast,.tabs-inner{display:none !important}
     main{padding:0;max-width:100%}
+    .print-header{display:flex !important}
     .card{background:#fff;box-shadow:none;border:1px solid #ccc;color:#000;page-break-inside:avoid;margin-bottom:8px;border-radius:6px}
     .card h2,.card h3{color:#000}
     th{background:#eee;color:#000}
     td,th{border-color:#999}
     input,select,textarea{background:#fff;color:#000;border:none;padding:0}
-    .pill{background:#eee;color:#333}
+    .pill{background:#eee;color:#333;border:1px solid #ccc}
     .tot{color:#000}
     .kpi{background:#f8f8f8;border-left-color:#333}
+    #tab-lista{display:none !important}
   }
 </style>
 </head>
 <body>
 
 <header class="top no-print">
-  <h1>🧰 <b>OrçaPro v2.4</b> · Móveis Planejados</h1>
+  <h1>
+    <img src="favicon.png" alt="OrçaProQually" onerror="this.style.display='none'">
+    <span><b>OrçaProQually</b> · Móveis Planejados</span>
+  </h1>
   <span id="nuvemStatus" class="pill" style="font-size:11px">☁️ Offline</span>
   <span id="templateStatus" class="pill" style="font-size:11px">⚙️ —</span>
   <span class="sp"></span>
@@ -123,8 +142,23 @@
 </header>
 
 <main>
+  <!-- CABEÇALHO PARA IMPRESSÃO -->
+  <div class="print-header">
+    <img src="logo.png" alt="OrçaProQually" onerror="this.style.display='none'">
+    <div class="ph-txt">
+      <h1>OrçaProQually · Móveis Planejados</h1>
+      <div class="ph-sub">Vidro · Alumínio · ACM — Projeto sob medida</div>
+    </div>
+    <div class="ph-info">
+      <div><b>Orçamento:</b> <span id="phNumero">—</span></div>
+      <div><b>Data:</b> <span id="phData">—</span></div>
+      <div><b>Cliente:</b> <span id="phCliente">—</span></div>
+    </div>
+  </div>
+
   <div class="tabs no-print">
     <div class="tab on" data-tab="orc">📐 Orçamento</div>
+    <div class="tab" data-tab="lista">📁 Meus Orçamentos</div>
     <div class="tab" data-tab="comp">🧩 Composições</div>
     <div class="tab" data-tab="mat">💲 Materiais & Preços</div>
     <div class="tab" data-tab="res">📊 Resultado</div>
@@ -163,6 +197,26 @@
     </div>
 
     <div id="listaAmb"></div>
+  </section>
+
+  <!-- MEUS ORÇAMENTOS -->
+  <section id="tab-lista" class="hidden">
+    <div class="card">
+      <div class="flex-between">
+        <h2 style="margin:0">📁 Meus Orçamentos</h2>
+        <div class="row no-print">
+          <button class="btn ok" onclick="novoOrcamento()">➕ Criar Novo Orçamento</button>
+          <button class="btn sec" onclick="atualizarListaOrcamentos()">🔄 Atualizar</button>
+        </div>
+      </div>
+      <p class="small" style="margin-top:10px">👇 Selecione um orçamento para <b>abrir</b>, <b>duplicar</b> ou <b>excluir</b>.</p>
+      <div id="listaOrcamentos"></div>
+    </div>
+
+    <div class="card">
+      <h2>Orçamento Atual</h2>
+      <div id="infoOrcamentoAtual"></div>
+    </div>
   </section>
 
   <!-- COMPOSIÇÕES -->
@@ -242,10 +296,10 @@
   <!-- HISTÓRICO -->
   <section id="tab-hist" class="hidden">
     <div class="card">
-      <h2>Orçamentos Salvos Localmente</h2>
+      <h2>Histórico Local (Backup)</h2>
+      <p class="small">Snapshots automáticos das alterações. Útil para recuperar uma versão anterior.</p>
       <div class="row no-print" style="margin-bottom:10px">
-        <button class="btn ok" onclick="salvarOrcamento()">💾 Salvar localmente</button>
-        <button class="btn sec" onclick="novoOrcamento()">📄 Novo (mantém padrões)</button>
+        <button class="btn ok" onclick="salvarOrcamento()">💾 Criar snapshot agora</button>
       </div>
       <div id="listaHist"></div>
     </div>
@@ -257,10 +311,8 @@
 
 <script>
 /* =====================================================================
-   OrçaPro v2.4 — Modelo de dados
+   OrçaProQually v2.5 — Modelo de dados
    ===================================================================== */
-
-/* Cores disponíveis */
 const CORES_PERFIL = ["Bronze","Preto","Branco","Champanhe","Fosco","A definir"];
 const CORES_VIDRO  = ["Incolor","Preto","Branco","Champanhe","Cinza","Bege","A definir"];
 
@@ -459,10 +511,19 @@ let state = novoEstado();
 let hist = [];
 let templateNuvem = null;
 
+function gerarIdLocal(){
+  return "LOCAL-" + Date.now() + "-" + Math.random().toString(36).slice(2,6).toUpperCase();
+}
+
 function novoEstado(){
   return {
-    orcamento:{ numero:"", cliente:"", telefone:"", data:new Date().toISOString().slice(0,10),
-                vendedor:"", validade:15, obs:"" },
+    orcamento:{
+      id: gerarIdLocal(),
+      numero:"", cliente:"", telefone:"",
+      data:new Date().toISOString().slice(0,10),
+      vendedor:"", validade:15, obs:"",
+      status:"Rascunho"
+    },
     ambientes: [],
     materiais: JSON.parse(JSON.stringify(MAT_DEFAULT)),
     composicoes: JSON.parse(JSON.stringify(COMP_DEFAULT)),
@@ -476,8 +537,10 @@ function novoEstado(){
 function normalizeState(s){
   const base = novoEstado();
   if(!s || typeof s !== "object") return base;
+  const orc = { ...base.orcamento, ...(s.orcamento||{}) };
+  if(!orc.id) orc.id = gerarIdLocal();
   return {
-    orcamento:   { ...base.orcamento,   ...(s.orcamento||{}) },
+    orcamento:   orc,
     ambientes:   Array.isArray(s.ambientes) ? s.ambientes : [],
     materiais:   { ...base.materiais,   ...(s.materiais||{}) },
     composicoes: { ...base.composicoes, ...(s.composicoes||{}) },
@@ -488,8 +551,8 @@ function normalizeState(s){
 function save(){
   try{
     state = normalizeState(state);
-    const payload = { v:4, savedAt:new Date().toISOString(), state };
-    localStorage.setItem("orcPro_v4", JSON.stringify(payload));
+    const payload = { v:5, savedAt:new Date().toISOString(), state };
+    localStorage.setItem("orcProQually_v5", JSON.stringify(payload));
     if(typeof agendarSyncSheets === "function") agendarSyncSheets();
   }catch(e){
     console.error("Erro ao salvar:", e);
@@ -499,14 +562,16 @@ function save(){
 
 function load(){
   try{
-    const raw = localStorage.getItem("orcPro_v4")
+    const raw = localStorage.getItem("orcProQually_v5")
+             || localStorage.getItem("orcPro_v4")
              || localStorage.getItem("orcPro_v3")
              || localStorage.getItem("orcPro_v2");
     if(raw){
       const d = JSON.parse(raw);
       state = normalizeState(d.state || d);
     } else state = novoEstado();
-    const h = localStorage.getItem("orcPro_hist");
+    const h = localStorage.getItem("orcProQually_hist")
+           || localStorage.getItem("orcPro_hist");
     hist = h ? (JSON.parse(h)||[]) : [];
   }catch(e){
     console.error("Erro ao carregar:", e);
@@ -515,7 +580,7 @@ function load(){
 }
 
 function saveHist(){
-  try{ localStorage.setItem("orcPro_hist", JSON.stringify(hist)); }catch(e){}
+  try{ localStorage.setItem("orcProQually_hist", JSON.stringify(hist)); }catch(e){}
 }
 
 /* =====================================================================
@@ -566,14 +631,12 @@ function calcularVao(vao, movel){
   const M = 2;
   const vars = { L, A, P, N, M };
 
-  // Cores do vão (com fallback "A definir")
   const corPerfil = vao.corPerfil || "A definir";
   const corVidro  = vao.corVidro  || "A definir";
-  const corACM    = vao.corVidro  || "A definir"; // ACM usa a mesma cor de vidro (por padrão)
+  const corACM    = vao.corVidro  || "A definir";
 
   const resultado = { perfis:[], vidros:[], acm:[], acess:{}, custo:{perfis:0,vidros:0,acm:0,acess:0,total:0} };
 
-  // PERFIS
   (comp.perfis||[]).forEach(it=>{
     const qtd = Math.round(evalFormula(it.qtdFormula, vars));
     if(qtd<=0) return;
@@ -585,7 +648,6 @@ function calcularVao(vao, movel){
     }
   });
 
-  // VIDROS base
   (comp.vidros||[]).forEach(it=>{
     const qtd = Math.round(evalFormula(it.qtdFormula, vars));
     if(qtd<=0) return;
@@ -609,7 +671,6 @@ function calcularVao(vao, movel){
     }
   });
 
-  // PRATELEIRAS
   if(comp.prateleiras && comp.prateleiras.ativo && vao.temPrateleiras){
     const p = comp.prateleiras;
     const qtdPrat = Math.max(0, +vao.qtdPrateleiras || p.qtd || 0);
@@ -641,7 +702,6 @@ function calcularVao(vao, movel){
     }
   }
 
-  // ACM
   (comp.acm||[]).forEach(it=>{
     const qtd = Math.round(evalFormula(it.qtdFormula, vars));
     if(qtd<=0) return;
@@ -662,14 +722,12 @@ function calcularVao(vao, movel){
     }
   });
 
-  // ACESSÓRIOS
   (comp.acess||[]).forEach(it=>{
     const qtd = Math.round(evalFormula(it.qtdFormula, vars));
     if(qtd<=0) return;
     resultado.acess[it.matId] = (resultado.acess[it.matId]||0) + qtd;
   });
 
-  // CUSTOS
   resultado.perfis.forEach(p=>{ const m = matById(p.matId); if(m) resultado.custo.perfis += (m.preco||0) * (p.comprimento/1000); });
   resultado.vidros.forEach(p=>{ const m = matById(p.matId); if(m) resultado.custo.vidros += (m.preco||0) * (p.largura*p.altura/1_000_000); });
   resultado.acm.forEach(p=>{ const m = matById(p.matId); if(m) resultado.custo.acm += (m.preco||0) * (p.largura*p.altura/1_000_000); });
@@ -873,7 +931,7 @@ function cortarChapas(pecas, chapa){
 /* =====================================================================
    GOOGLE SHEETS
    ===================================================================== */
-const SHEETS_API = "https://script.google.com/macros/s/AKfycbxGPLxlg6p510fr6pFscPippRya36hs_XLir5UqDSs71TiSEp63aAwf1GWIYz8RPFUdvA/exec";
+const SHEETS_API = "https://script.google.com/macros/s/AKfycbyiSKxFpYXZVSiWvLTPzoG1FCsRrP0bSDkq2jgafoZQOyDWethgp-yeiW8AocGZbq8Ncg/exec";
 
 let _sheetsTimer = null;
 function agendarSyncSheets(){
@@ -914,6 +972,7 @@ async function salvarNoSheets(silencioso = false){
       params:      state.params
     });
     state.orcamento.id = r.id;
+    save();
     atualizarStatusNuvem("ok");
     if(!silencioso) toast("☁️ Salvo na nuvem!");
     return r;
@@ -932,7 +991,8 @@ async function carregarDoSheets(id){
       orcamento: {
         id: p.id, numero: p.numero, cliente: p.cliente,
         data: p.data, vendedor: p.vendedor,
-        telefone: "", validade: 15, obs: ""
+        telefone: "", validade: 15, obs: "",
+        status: "Aberto"
       },
       ambientes:   p.ambientes   || [],
       materiais:   p.materiais   || state.materiais,
@@ -1037,7 +1097,7 @@ async function abrirListaNuvem(){
               <td>${p.data||"-"}</td>
               <td class="small">${p.updated_at ? new Date(p.updated_at).toLocaleString("pt-BR") : "-"}</td>
               <td>
-                <button class="btn sm" onclick="fecharModal();carregarDoSheets('${p.id}')">Abrir</button>
+                <button class="btn sm" onclick="fecharModal();abrirOrcamento('${p.id}','nuvem')">Abrir</button>
                 <button class="btn err sm" onclick="excluirDoSheets('${p.id}')">Excluir</button>
               </td>
             </tr>
@@ -1119,6 +1179,227 @@ async function carregarTemplateInicial(){
     const r = await sheetsRequest("carregarTemplate");
     if(r.template){ templateNuvem = r.template; atualizarStatusTemplate(); }
   }catch(e){ }
+}
+
+/* =====================================================================
+   GERENCIADOR DE MÚLTIPLOS ORÇAMENTOS
+   ===================================================================== */
+function novoOrcamento(){
+  if((state.ambientes||[]).length || state.orcamento.numero){
+    if(!confirm("Iniciar um NOVO orçamento? O atual ficará salvo no histórico local e na nuvem (se sincronizado).")) return;
+  }
+  salvarOrcamentoLocal();
+
+  const composicoes = JSON.parse(JSON.stringify(state.composicoes));
+  const materiais   = JSON.parse(JSON.stringify(state.materiais));
+  const params      = JSON.parse(JSON.stringify(state.params));
+
+  state = novoEstado();
+  state.composicoes = composicoes;
+  state.materiais   = materiais;
+  state.params      = params;
+
+  save(); render();
+  toast("➕ Novo orçamento criado");
+
+  document.querySelectorAll(".tabs .tab").forEach(x=>x.classList.remove("on"));
+  document.querySelector('.tab[data-tab="orc"]').classList.add("on");
+  ["orc","lista","comp","mat","res","proposta","compra","hist"].forEach(id=>{
+    document.getElementById("tab-"+id).classList.toggle("hidden", id!=="orc");
+  });
+}
+
+async function abrirOrcamento(id, fonte){
+  if(state.orcamento.id === id){ toast("Este orçamento já está aberto", false); return; }
+  if((state.ambientes||[]).length){
+    if(!confirm("Abrir outro orçamento? O atual será salvo antes.")) return;
+    salvarOrcamentoLocal();
+  }
+
+  if(fonte === "nuvem"){
+    await carregarDoSheets(id);
+    await atualizarListaOrcamentos();
+    return;
+  }
+
+  const item = hist.find(h => h.id === id || h.estado?.orcamento?.id === id);
+  if(!item){ toast("Orçamento não encontrado no histórico local", true); return; }
+
+  const composicoes = JSON.parse(JSON.stringify(state.composicoes));
+  const materiais   = JSON.parse(JSON.stringify(state.materiais));
+  const params      = JSON.parse(JSON.stringify(state.params));
+
+  state = normalizeState(JSON.parse(JSON.stringify(item.estado)));
+  if(!state.composicoes || !Object.keys(state.composicoes).length) state.composicoes = composicoes;
+  if(!state.materiais   || !Object.keys(state.materiais).length)   state.materiais   = materiais;
+  if(!state.params)                                                state.params      = params;
+
+  save(); render();
+  toast("📂 Orçamento carregado: " + (state.orcamento.numero || id));
+}
+
+function duplicarOrcamento(){
+  if(!state.orcamento.numero){ toast("Defina um número primeiro", true); return; }
+  if(!confirm("Criar uma CÓPIA deste orçamento?")) return;
+
+  salvarOrcamentoLocal();
+
+  const numeroAtual = state.orcamento.numero || "ORC";
+  const novoNum = prompt("Número do novo orçamento:", numeroAtual + "-CÓPIA") || (numeroAtual + "-CÓPIA");
+  state.orcamento.id = gerarIdLocal();
+  state.orcamento.numero = novoNum;
+  state.orcamento.data = new Date().toISOString().slice(0,10);
+
+  save(); render();
+  salvarOrcamentoLocal();
+  toast("📋 Cópia criada: " + novoNum);
+  atualizarListaOrcamentos();
+}
+
+async function excluirOrcamento(id, fonte){
+  if(!confirm("Excluir este orçamento?")) return;
+
+  hist = hist.filter(h => h.id !== id && h.estado?.orcamento?.id !== id);
+  saveHist();
+
+  if(fonte === "nuvem"){
+    try{ await sheetsRequest("excluir", { id }); }catch(e){}
+  }
+
+  if(state.orcamento.id === id){
+    const composicoes = JSON.parse(JSON.stringify(state.composicoes));
+    const materiais   = JSON.parse(JSON.stringify(state.materiais));
+    const params      = JSON.parse(JSON.stringify(state.params));
+    state = novoEstado();
+    state.composicoes = composicoes;
+    state.materiais   = materiais;
+    state.params      = params;
+  }
+
+  save(); render();
+  await atualizarListaOrcamentos();
+  toast("🗑️ Excluído");
+}
+
+function salvarOrcamentoLocal(){
+  const id = state.orcamento.id || gerarIdLocal();
+  state.orcamento.id = id;
+  const numero = state.orcamento.numero || ("ORC-" + new Date().getTime());
+  state.orcamento.numero = numero;
+
+  const snap = {
+    id: id,
+    nome: numero + (state.orcamento.cliente ? " · " + state.orcamento.cliente : ""),
+    data: new Date().toISOString(),
+    estado: JSON.parse(JSON.stringify(state))
+  };
+
+  const idx = hist.findIndex(h => h.id === id);
+  if(idx >= 0) hist[idx] = snap;
+  else hist.unshift(snap);
+
+  if(hist.length > 100) hist.length = 100;
+  saveHist();
+  save();
+  return id;
+}
+
+async function atualizarListaOrcamentos(){
+  const box = document.getElementById("listaOrcamentos");
+  if(!box) return;
+  box.innerHTML = '<p class="small">Carregando…</p>';
+
+  const locais = hist.map(h => ({
+    fonte: "local",
+    id: h.id,
+    nome: h.nome || "Sem nome",
+    numero: h.estado?.orcamento?.numero || "—",
+    cliente: h.estado?.orcamento?.cliente || "—",
+    data: h.estado?.orcamento?.data || "",
+    updated_at: h.data,
+    ativo: h.id === state.orcamento.id
+  }));
+
+  let nuvem = [];
+  try{
+    const r = await sheetsRequest("listar");
+    nuvem = (r.lista || []).map(p => ({
+      fonte: "nuvem",
+      id: p.id,
+      numero: p.numero || "—",
+      cliente: p.cliente || "—",
+      data: p.data || "",
+      updated_at: p.updated_at,
+      ativo: p.id === state.orcamento.id
+    }));
+  }catch(e){ nuvem = []; }
+
+  const idsNuvem = new Set(nuvem.map(n=>n.id));
+  const locaisFiltrados = locais.filter(l => !idsNuvem.has(l.id));
+  const todos = [...nuvem, ...locaisFiltrados];
+
+  if(!todos.length){
+    box.innerHTML = `
+      <div class="subcard" style="text-align:center;padding:20px">
+        <p style="margin:0 0 10px 0">📭 Nenhum orçamento salvo ainda.</p>
+        <button class="btn ok" onclick="novoOrcamento()">➕ Criar primeiro orçamento</button>
+      </div>`;
+    return;
+  }
+
+  todos.sort((a,b) => new Date(b.updated_at||0) - new Date(a.updated_at||0));
+
+  box.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Nº</th><th>Cliente</th><th>Data</th><th>Atualizado</th><th>Fonte</th>
+          <th style="text-align:right">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${todos.map(o => `
+          <tr style="${o.ativo ? 'background:#0e2240' : ''}">
+            <td><b>${escapeHtml(o.numero)}</b>${o.ativo ? ' <span class="pill ok">ABERTO</span>' : ''}</td>
+            <td>${escapeHtml(o.cliente)}</td>
+            <td>${o.data || "-"}</td>
+            <td class="small">${o.updated_at ? new Date(o.updated_at).toLocaleString("pt-BR") : "-"}</td>
+            <td><span class="pill ${o.fonte==="nuvem"?"acc":"warn"}">${o.fonte==="nuvem"?"☁️ Nuvem":"💾 Local"}</span></td>
+            <td style="text-align:right">
+              <button class="btn sm" onclick="abrirOrcamento('${o.id}','${o.fonte}')">📂 Abrir</button>
+              <button class="btn err sm" onclick="excluirOrcamento('${o.id}','${o.fonte}')">🗑️</button>
+            </td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+
+  const info = document.getElementById("infoOrcamentoAtual");
+  if(info){
+    const o = state.orcamento;
+    info.innerHTML = `
+      <div class="grid g4">
+        <div class="kpi"><div class="l">Nº</div><div class="v">${escapeHtml(o.numero||"—")}</div></div>
+        <div class="kpi"><div class="l">Cliente</div><div class="v">${escapeHtml(o.cliente||"—")}</div></div>
+        <div class="kpi"><div class="l">Data</div><div class="v">${o.data||"—"}</div></div>
+        <div class="kpi"><div class="l">Ambientes</div><div class="v">${(state.ambientes||[]).length}</div></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn ok" onclick="salvarOrcamentoLocal();salvarNoSheets();atualizarListaOrcamentos()">💾 Salvar Atual</button>
+        <button class="btn sec" onclick="duplicarOrcamento()">📋 Duplicar</button>
+        <button class="btn warn" onclick="novoOrcamento()">➕ Novo</button>
+        <button class="btn err" onclick="excluirOrcamento('${o.id||""}','${o.id&&o.id.startsWith("ORC-")?"nuvem":"local"}')">🗑️ Excluir</button>
+      </div>
+    `;
+  }
+}
+
+/* Compatibilidade: botão do histórico */
+function salvarOrcamento(){
+  salvarOrcamentoLocal();
+  toast("💾 Snapshot criado");
+  renderHistorico();
 }
 
 /* =====================================================================
@@ -1255,6 +1536,14 @@ function render(){
   document.getElementById("orcVend").value = state.orcamento.vendedor || "";
   document.getElementById("orcVal").value  = state.orcamento.validade ?? 15;
   document.getElementById("orcObs").value  = state.orcamento.obs || "";
+
+  // Header de impressão
+  const phN = document.getElementById("phNumero");
+  const phD = document.getElementById("phData");
+  const phC = document.getElementById("phCliente");
+  if(phN) phN.textContent = state.orcamento.numero || "—";
+  if(phD) phD.textContent = state.orcamento.data || "—";
+  if(phC) phC.textContent = state.orcamento.cliente || "—";
 
   document.getElementById("cv_w").value = state.params.chapaVidro.w;
   document.getElementById("cv_h").value = state.params.chapaVidro.h;
@@ -1776,10 +2065,11 @@ function renderProposta(g){
               const k = (v.corPerfil||"A definir") + "|" + (v.corVidro||"A definir");
               grupo[k] = (grupo[k]||0)+1;
             }));
-            return Object.entries(grupo).map(([k,q])=>{
+            const rows = Object.entries(grupo).map(([k,q])=>{
               const [cp,cv] = k.split("|");
               return `<tr><td>${corPill(cp,"")}</td><td>${corPill(cv,"")}</td><td style="text-align:right">${q}</td></tr>`;
             }).join("");
+            return rows || '<tr><td colspan="3" class="small">Nenhum vão cadastrado.</td></tr>';
           })()}
         </tbody>
       </table>
@@ -1796,7 +2086,7 @@ function renderProposta(g){
           <td style="text-align:right" class="tot">${fmt(g.total)}</td>
         </tr>
       </table>
-      <p class="small" style="margin-top:20px">Proposta sujeita a alteração. Documento gerado por OrçaPro.</p>
+      <p class="small" style="margin-top:20px">Proposta sujeita a alteração. Documento gerado por OrçaProQually.</p>
     </div>`;
 }
 
@@ -1848,28 +2138,18 @@ function exportCSV(){
 }
 
 /* =====================================================================
-   HISTÓRICO LOCAL
+   HISTÓRICO
    ===================================================================== */
-function salvarOrcamento(){
-  const nome = state.orcamento.numero || prompt("Nome do orçamento:") || "Sem nome";
-  hist.unshift({ nome, data:new Date().toISOString(), estado:JSON.parse(JSON.stringify(state)) });
-  if(hist.length>50) hist.length = 50;
-  saveHist(); renderHistorico(); toast("Orçamento salvo localmente!");
-}
-function novoOrcamento(){
-  if(!confirm("Limpar o orçamento atual? Suas composições e materiais personalizados serão mantidos.")) return;
+function carregarHist(i){
+  if(!confirm("Carregar este snapshot? O orçamento atual será substituído.")) return;
   const composicoes = JSON.parse(JSON.stringify(state.composicoes));
   const materiais   = JSON.parse(JSON.stringify(state.materiais));
   const params      = JSON.parse(JSON.stringify(state.params));
-  state = novoEstado();
-  state.composicoes = composicoes;
-  state.materiais   = materiais;
-  state.params      = params;
-  save(); render(); toast("Novo orçamento (padrões preservados)");
-}
-function carregarHist(i){
-  if(!confirm("Carregar?")) return;
-  state = JSON.parse(JSON.stringify(hist[i].estado)); save(); render(); toast("Carregado");
+  state = normalizeState(JSON.parse(JSON.stringify(hist[i].estado)));
+  if(!state.composicoes || !Object.keys(state.composicoes).length) state.composicoes = composicoes;
+  if(!state.materiais   || !Object.keys(state.materiais).length)   state.materiais   = materiais;
+  if(!state.params)                                                state.params      = params;
+  save(); render(); toast("Carregado do histórico");
 }
 function delHist(i){ hist.splice(i,1); saveHist(); renderHistorico(); }
 function renderHistorico(){
@@ -1882,7 +2162,7 @@ function renderHistorico(){
         <button class="btn sm no-print" onclick="carregarHist(${i})">Carregar</button>
         <button class="btn err sm no-print" onclick="delHist(${i})">✕</button>
       </td>
-    </tr>`).join("")}</tbody></table>` : '<p class="small">Nenhum orçamento salvo.</p>';
+    </tr>`).join("")}</tbody></table>` : '<p class="small">Nenhum snapshot salvo.</p>';
 }
 
 /* =====================================================================
@@ -1909,7 +2189,9 @@ function importJSON(e){
   r.readAsText(f);
 }
 function resetAll(){
-  if(!confirm("Zerar TUDO? (inclui histórico local)")) return;
+  if(!confirm("Zerar TUDO? (inclui histórico local e orçamentos salvos)")) return;
+  localStorage.removeItem("orcProQually_v5");
+  localStorage.removeItem("orcProQually_hist");
   localStorage.removeItem("orcPro_v4");
   localStorage.removeItem("orcPro_v3");
   localStorage.removeItem("orcPro_v2");
@@ -1925,9 +2207,10 @@ document.querySelectorAll(".tabs .tab").forEach(t=>{
   t.onclick = () => {
     document.querySelectorAll(".tabs .tab").forEach(x=>x.classList.remove("on"));
     t.classList.add("on");
-    ["orc","comp","mat","res","proposta","compra","hist"].forEach(id=>{
+    ["orc","lista","comp","mat","res","proposta","compra","hist"].forEach(id=>{
       document.getElementById("tab-"+id).classList.toggle("hidden", id!==t.dataset.tab);
     });
+    if(t.dataset.tab === "lista") atualizarListaOrcamentos();
   };
 });
 
@@ -1935,6 +2218,8 @@ document.querySelectorAll(".tabs .tab").forEach(t=>{
    INICIALIZAÇÃO
    ===================================================================== */
 load();
+if(!state.orcamento.id) state.orcamento.id = gerarIdLocal();
+
 if(!state.ambientes.length){
   state.ambientes.push({
     id:uid(), nome:"Cozinha Exemplo", largura:5000, altura:800, profundidade:500,
@@ -1947,6 +2232,11 @@ if(!state.ambientes.length){
   state.orcamento.cliente = "Cliente Exemplo";
 }
 save();
+
+if(!hist.find(h => h.id === state.orcamento.id)){
+  salvarOrcamentoLocal();
+}
+
 render();
 atualizarStatusNuvem("off");
 carregarTemplateInicial();
