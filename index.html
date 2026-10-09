@@ -131,7 +131,7 @@
   <span id="nuvemStatus" class="pill" style="font-size:11px">☁️ Offline</span>
   <span id="templateStatus" class="pill" style="font-size:11px">⚙️ —</span>
   <span class="sp"></span>
-  <button class="btn ok sm" onclick="salvarNoSheets()">☁️ Salvar Projeto</button>
+  <button class="btn ok sm" onclick="salvarTudo()">💾 Salvar Projeto</button>
   <button class="btn sec sm" onclick="abrirListaNuvem()">📂 Abrir da Nuvem</button>
   <button class="btn sec sm" onclick="diagnosticoNuvem()">🩺 Diagnóstico</button>
   <button class="btn sec sm" onclick="exportJSON()">💾 Exportar</button>
@@ -207,9 +207,10 @@
         <div class="row no-print">
           <button class="btn ok" onclick="novoOrcamento()">➕ Criar Novo Orçamento</button>
           <button class="btn sec" onclick="atualizarListaOrcamentos()">🔄 Atualizar</button>
+          <button class="btn warn" onclick="limparDuplicadosLocais()">🧹 Limpar duplicados</button>
         </div>
       </div>
-      <p class="small" style="margin-top:10px">👇 Selecione um orçamento para <b>abrir</b>, <b>duplicar</b> ou <b>excluir</b>.</p>
+      <p class="small" style="margin-top:10px">👇 Selecione um orçamento para <b>abrir</b>, <b>duplicar</b> ou <b>excluir</b>. Registros com mesmo Nº + Cliente são agrupados automaticamente.</p>
       <div id="listaOrcamentos"></div>
     </div>
 
@@ -311,7 +312,7 @@
 
 <script>
 /* =====================================================================
-   OrçaProQually v2.5 — Modelo de dados
+   OrçaProQually v2.6 — Modelo de dados
    ===================================================================== */
 const CORES_PERFIL = ["Bronze","Preto","Branco","Champanhe","Fosco","A definir"];
 const CORES_VIDRO  = ["Incolor","Preto","Branco","Champanhe","Cinza","Bege","A definir"];
@@ -539,6 +540,11 @@ function normalizeState(s){
   if(!s || typeof s !== "object") return base;
   const orc = { ...base.orcamento, ...(s.orcamento||{}) };
   if(!orc.id) orc.id = gerarIdLocal();
+  // Sanitiza data
+  if(orc.data && typeof orc.data === "string"){
+    const m = orc.data.match(/^(\d{4}-\d{2}-\d{2})/);
+    if(m) orc.data = m[1];
+  }
   return {
     orcamento:   orc,
     ambientes:   Array.isArray(s.ambientes) ? s.ambientes : [],
@@ -551,8 +557,8 @@ function normalizeState(s){
 function save(){
   try{
     state = normalizeState(state);
-    const payload = { v:5, savedAt:new Date().toISOString(), state };
-    localStorage.setItem("orcProQually_v5", JSON.stringify(payload));
+    const payload = { v:6, savedAt:new Date().toISOString(), state };
+    localStorage.setItem("orcProQually_v6", JSON.stringify(payload));
     if(typeof agendarSyncSheets === "function") agendarSyncSheets();
   }catch(e){
     console.error("Erro ao salvar:", e);
@@ -562,7 +568,8 @@ function save(){
 
 function load(){
   try{
-    const raw = localStorage.getItem("orcProQually_v5")
+    const raw = localStorage.getItem("orcProQually_v6")
+             || localStorage.getItem("orcProQually_v5")
              || localStorage.getItem("orcPro_v4")
              || localStorage.getItem("orcPro_v3")
              || localStorage.getItem("orcPro_v2");
@@ -588,7 +595,8 @@ function saveHist(){
    ===================================================================== */
 function uid(){ return Math.random().toString(36).slice(2,9); }
 function fmt(v){ return (v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"}); }
-  function fmtData(d){
+
+function fmtData(d){
   if(!d) return "—";
   try{
     if(d instanceof Date) return d.toLocaleDateString("pt-BR");
@@ -603,18 +611,23 @@ function fmt(v){ return (v||0).toLocaleString("pt-BR",{style:"currency",currency
     return s;
   }catch(e){ return "—"; }
 }
+
 function fmtN(v,d=2){ return (v||0).toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d}); }
+
 function toast(msg, err){
   const t = document.getElementById("toast");
   const cls = err ? "toast show err" : (err === false ? "toast show warn" : "toast show");
   t.textContent = msg; t.className = cls;
   setTimeout(()=>t.className="toast", 2400);
 }
+
 function escapeHtml(s){ return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
 function matById(id){
   for(const cat of Object.values(state.materiais)) for(const m of cat) if(m.id===id) return m;
   return null;
 }
+
 function evalFormula(formula, vars){
   if(formula===""||formula==null) return 0;
   try{
@@ -623,10 +636,12 @@ function evalFormula(formula, vars){
     return isFinite(v) ? v : 0;
   }catch(e){ return 0; }
 }
+
 function corClass(cor){
   if(!cor) return "pill";
   return "pill " + cor.toLowerCase().replace(/[^a-z]/g,"");
 }
+
 function corPill(cor, prefixo){
   if(!cor) cor = "A definir";
   const cls = corClass(cor);
@@ -946,11 +961,14 @@ function cortarChapas(pecas, chapa){
 /* =====================================================================
    GOOGLE SHEETS
    ===================================================================== */
-const SHEETS_API = "https://script.google.com/macros/s/AKfycbyOgoKuorYAf9tD50eUlNA3qLAFCCQTR97vAJTikdWEat6KH___horwZ7SKaoO-nUKC8g/exec";
+const SHEETS_API = "https://script.google.com/macros/s/AKfycbx2AWxCNe8dPzerLJqHKLQ3HZx0ZLo5WPJnj8MedGwIey49AHgJnc5GZSqjQYp-8fyCBQ/exec";
 
 let _sheetsTimer = null;
 function agendarSyncSheets(){
   if(!SHEETS_API || SHEETS_API.includes("COLE_AQUI")) return;
+  // Não sincroniza se o orçamento estiver totalmente vazio
+  const vazio = !state.orcamento.numero && !state.orcamento.cliente && !(state.ambientes||[]).length;
+  if(vazio) return;
   clearTimeout(_sheetsTimer);
   _sheetsTimer = setTimeout(() => salvarNoSheets(true), 3000);
 }
@@ -973,8 +991,16 @@ async function sheetsRequest(action, payload = {}){
 
 async function salvarNoSheets(silencioso = false){
   try{
+    // Não salva orçamento em branco na nuvem
+    if(!state.orcamento.numero && !state.orcamento.cliente){
+      if(!silencioso) toast("⚠️ Preencha Nº e/ou Cliente antes de salvar", false);
+      return;
+    }
+
     atualizarStatusNuvem("sync");
     if(!silencioso) toast("☁️ Salvando…");
+
+    // ← MUITO IMPORTANTE: envia o ID local como está
     const r = await sheetsRequest("salvar", {
       id:          state.orcamento.id || null,
       cliente:     state.orcamento.cliente,
@@ -986,8 +1012,11 @@ async function salvarNoSheets(silencioso = false){
       composicoes: state.composicoes,
       params:      state.params
     });
-    state.orcamento.id = r.id;
+
+    // ← Preserva o ID que voltou (não força troca se for o mesmo)
+    if(r.id) state.orcamento.id = r.id;
     save();
+
     atualizarStatusNuvem("ok");
     if(!silencioso) toast("☁️ Salvo na nuvem!");
     return r;
@@ -997,11 +1026,24 @@ async function salvarNoSheets(silencioso = false){
   }
 }
 
+/* ← Botão "Salvar Projeto" — salva local + nuvem */
+async function salvarTudo(){
+  salvarOrcamentoLocal();
+  await salvarNoSheets(false);
+  await atualizarListaOrcamentos();
+}
+
 async function carregarDoSheets(id){
   try{
     const r = await sheetsRequest("carregar", { id });
     if(!r.projeto) throw new Error("Projeto vazio");
     const p = r.projeto;
+
+    // Preserva composições/materiais/params atuais como fallback
+    const compAtuais = JSON.parse(JSON.stringify(state.composicoes));
+    const matAtuais  = JSON.parse(JSON.stringify(state.materiais));
+    const parAtuais  = JSON.parse(JSON.stringify(state.params));
+
     state = normalizeState({
       orcamento: {
         id: p.id, numero: p.numero, cliente: p.cliente,
@@ -1010,11 +1052,17 @@ async function carregarDoSheets(id){
         status: "Aberto"
       },
       ambientes:   p.ambientes   || [],
-      materiais:   p.materiais   || state.materiais,
-      composicoes: p.composicoes || state.composicoes,
-      params:      p.params      || state.params
+      materiais:   p.materiais   || matAtuais,
+      composicoes: p.composicoes || compAtuais,
+      params:      p.params      || parAtuais
     });
-    save(); render();
+
+    // Garante que o ID local reflita o ID da nuvem
+    state.orcamento.id = p.id;
+
+    // Salva o snapshot local com o mesmo ID
+    salvarOrcamentoLocal();
+    render();
     toast("☁️ Carregado: " + (p.numero || p.id));
   }catch(e){
     toast("Erro ao carregar: " + e.message, true);
@@ -1030,6 +1078,9 @@ async function excluirDoSheets(id){
   if(!confirm("Excluir este projeto da nuvem?")) return;
   try{
     await sheetsRequest("excluir", { id });
+    // Remove do histórico local também
+    hist = hist.filter(h => h.id !== id && h.estado?.orcamento?.id !== id);
+    saveHist();
     toast("Excluído"); fecharModal(); abrirListaNuvem();
   }catch(e){ toast("Erro: " + e.message, true); }
 }
@@ -1109,7 +1160,7 @@ async function abrirListaNuvem(){
             <tr>
               <td>${escapeHtml(p.numero||"-")}</td>
               <td>${escapeHtml(p.cliente||"-")}</td>
-              <td>${p.data||"-"}</td>
+              <td>${fmtData(p.data)}</td>
               <td class="small">${p.updated_at ? new Date(p.updated_at).toLocaleString("pt-BR") : "-"}</td>
               <td>
                 <button class="btn sm" onclick="fecharModal();abrirOrcamento('${p.id}','nuvem')">Abrir</button>
@@ -1194,6 +1245,71 @@ async function carregarTemplateInicial(){
     const r = await sheetsRequest("carregarTemplate");
     if(r.template){ templateNuvem = r.template; atualizarStatusTemplate(); }
   }catch(e){ }
+}
+
+/* =====================================================================
+   ANTI-DUPLICATA
+   ===================================================================== */
+function consolidarDuplicados(registros){
+  const mapa = {};
+  registros.forEach(r => {
+    const chave = (String(r.numero||"").trim().toLowerCase()) + "|" +
+                  (String(r.cliente||"").trim().toLowerCase());
+    if(!chave || chave === "||") return;
+    if(!mapa[chave]){
+      mapa[chave] = r;
+      mapa[chave]._duplicados = [];
+    } else {
+      const atualNuvem = mapa[chave].fonte === "nuvem";
+      const novoNuvem  = r.fonte === "nuvem";
+      if(novoNuvem && !atualNuvem){
+        r._duplicados = (mapa[chave]._duplicados || []).concat([mapa[chave]]);
+        mapa[chave] = r;
+      } else {
+        mapa[chave]._duplicados.push(r);
+      }
+    }
+  });
+  return Object.values(mapa);
+}
+
+async function limparDuplicadosLocais(){
+  if(!confirm("Limpar duplicatas? Isso remove registros repetidos do app e da planilha.")) return;
+
+  // 1) Limpa localmente
+  try{
+    const r = await sheetsRequest("listar");
+    const chavesNuvem = new Set((r.lista||[]).map(x =>
+      (String(x.numero||"").trim().toLowerCase()) + "|" +
+      (String(x.cliente||"").trim().toLowerCase())
+    ));
+    const idsNuvem = new Set((r.lista||[]).map(x=>x.id));
+
+    const antes = hist.length;
+    hist = hist.filter(h => {
+      const id = h.id || "";
+      const numero = String(h.estado?.orcamento?.numero || "").trim().toLowerCase();
+      const cliente = String(h.estado?.orcamento?.cliente || "").trim().toLowerCase();
+      const chave = numero + "|" + cliente;
+      if(idsNuvem.has(id)) return true;
+      if(chavesNuvem.has(chave)) return false;
+      return true;
+    });
+    if(hist.length !== antes){
+      saveHist();
+      toast(`🧹 ${antes - hist.length} local(is) removido(s)`);
+    }
+  }catch(e){ /* sem internet — só pula a parte local */ }
+
+  // 2) Limpa no backend
+  try{
+    const r = await sheetsRequest("deduplicar");
+    toast(`🧹 ${r.removidas || 0} linha(s) removida(s) da planilha`);
+  }catch(e){
+    // Função pode não existir no backend antigo — ignora
+  }
+
+  await atualizarListaOrcamentos();
 }
 
 /* =====================================================================
@@ -1299,8 +1415,8 @@ async function excluirOrcamento(id, fonte){
 function salvarOrcamentoLocal(){
   const id = state.orcamento.id || gerarIdLocal();
   state.orcamento.id = id;
-  const numero = state.orcamento.numero || ("ORC-" + new Date().getTime());
-  state.orcamento.numero = numero;
+  const numero = state.orcamento.numero || ("SEM-NUM-" + new Date().getTime());
+  if(!state.orcamento.numero) state.orcamento.numero = numero;
 
   const snap = {
     id: id,
@@ -1349,9 +1465,12 @@ async function atualizarListaOrcamentos(){
     }));
   }catch(e){ nuvem = []; }
 
+  // Remove locais cujo ID já existe na nuvem
   const idsNuvem = new Set(nuvem.map(n=>n.id));
   const locaisFiltrados = locais.filter(l => !idsNuvem.has(l.id));
-  const todos = [...nuvem, ...locaisFiltrados];
+
+  // ⚡ Consolida duplicatas por numero+cliente
+  const todos = consolidarDuplicados([...nuvem, ...locaisFiltrados]);
 
   if(!todos.length){
     box.innerHTML = `
@@ -1373,9 +1492,14 @@ async function atualizarListaOrcamentos(){
         </tr>
       </thead>
       <tbody>
-        ${todos.map(o => `
+        ${todos.map(o => {
+          const dups = (o._duplicados||[]).length;
+          const tag = dups > 0
+            ? ` <span class="pill warn" title="${dups} cópia(s) antiga(s) oculta(s)">🧹 mesclado</span>`
+            : "";
+          return `
           <tr style="${o.ativo ? 'background:#0e2240' : ''}">
-            <td><b>${escapeHtml(o.numero)}</b>${o.ativo ? ' <span class="pill ok">ABERTO</span>' : ''}</td>
+            <td><b>${escapeHtml(o.numero)}</b>${o.ativo ? ' <span class="pill ok">ABERTO</span>' : ''}${tag}</td>
             <td>${escapeHtml(o.cliente)}</td>
             <td>${fmtData(o.data)}</td>
             <td class="small">${o.updated_at ? new Date(o.updated_at).toLocaleString("pt-BR") : "-"}</td>
@@ -1384,8 +1508,8 @@ async function atualizarListaOrcamentos(){
               <button class="btn sm" onclick="abrirOrcamento('${o.id}','${o.fonte}')">📂 Abrir</button>
               <button class="btn err sm" onclick="excluirOrcamento('${o.id}','${o.fonte}')">🗑️</button>
             </td>
-          </tr>
-        `).join("")}
+          </tr>`;
+        }).join("")}
       </tbody>
     </table>
   `;
@@ -1401,7 +1525,7 @@ async function atualizarListaOrcamentos(){
         <div class="kpi"><div class="l">Ambientes</div><div class="v">${(state.ambientes||[]).length}</div></div>
       </div>
       <div class="row" style="margin-top:12px">
-        <button class="btn ok" onclick="salvarOrcamentoLocal();salvarNoSheets();atualizarListaOrcamentos()">💾 Salvar Atual</button>
+        <button class="btn ok" onclick="salvarTudo()">💾 Salvar Atual</button>
         <button class="btn sec" onclick="duplicarOrcamento()">📋 Duplicar</button>
         <button class="btn warn" onclick="novoOrcamento()">➕ Novo</button>
         <button class="btn err" onclick="excluirOrcamento('${o.id||""}','${o.id&&o.id.startsWith("ORC-")?"nuvem":"local"}')">🗑️ Excluir</button>
@@ -1410,7 +1534,6 @@ async function atualizarListaOrcamentos(){
   }
 }
 
-/* Compatibilidade: botão do histórico */
 function salvarOrcamento(){
   salvarOrcamentoLocal();
   toast("💾 Snapshot criado");
@@ -1552,7 +1675,6 @@ function render(){
   document.getElementById("orcVal").value  = state.orcamento.validade ?? 15;
   document.getElementById("orcObs").value  = state.orcamento.obs || "";
 
-  // Header de impressão
   const phN = document.getElementById("phNumero");
   const phD = document.getElementById("phData");
   const phC = document.getElementById("phCliente");
@@ -2048,7 +2170,7 @@ function renderProposta(g){
       <div class="flex-between" style="margin-bottom:14px">
         <div>
           <h2 style="margin:0;color:var(--acc2)">PROPOSTA COMERCIAL</h2>
-          <p class="small">Nº ${escapeHtml(o.numero||"-")} · ${o.data||""}</p>
+          <p class="small">Nº ${escapeHtml(o.numero||"-")} · ${fmtData(o.data)}</p>
         </div>
         <div style="text-align:right">
           <p class="small">Validade: ${o.validade||15} dias (até ${dataVenc.toLocaleDateString("pt-BR")})</p>
@@ -2205,6 +2327,7 @@ function importJSON(e){
 }
 function resetAll(){
   if(!confirm("Zerar TUDO? (inclui histórico local e orçamentos salvos)")) return;
+  localStorage.removeItem("orcProQually_v6");
   localStorage.removeItem("orcProQually_v5");
   localStorage.removeItem("orcProQually_hist");
   localStorage.removeItem("orcPro_v4");
@@ -2235,7 +2358,7 @@ document.querySelectorAll(".tabs .tab").forEach(t=>{
 load();
 if(!state.orcamento.id) state.orcamento.id = gerarIdLocal();
 
-if(!state.ambientes.length){
+if(!state.ambientes.length && !state.orcamento.numero){
   state.ambientes.push({
     id:uid(), nome:"Cozinha Exemplo", largura:5000, altura:800, profundidade:500,
     vaos:[
