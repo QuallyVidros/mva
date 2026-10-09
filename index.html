@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>OrçaPro · Móveis Planejados (Vidro/Alumínio/ACM)</title>
+<title>OrçaPro v2.3 · Móveis Planejados (Vidro/Alumínio/ACM)</title>
 <style>
   :root{
     --bg:#0b1220; --panel:#111a2e; --panel2:#152038; --line:#1e293b;
@@ -40,6 +40,7 @@
   .g4{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
   label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px}
   input,select,textarea{width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);background:#0a1526;color:var(--txt);font-size:13px;font-family:inherit}
+  input[type="checkbox"]{width:auto;padding:0}
   input:focus,select:focus,textarea:focus{outline:2px solid var(--acc);border-color:transparent}
   textarea{resize:vertical;min-height:56px}
   table{width:100%;border-collapse:collapse;font-size:13px}
@@ -59,7 +60,6 @@
   .tab:hover{background:#22335a}
   .tab.on{background:var(--acc);color:#fff;border-color:var(--acc2)}
   .hidden{display:none !important}
-  .mov{background:var(--panel2);border-left:3px solid var(--acc);padding:12px;border-radius:8px;margin-bottom:10px}
   .vao{background:#0d1728;border-left:3px solid var(--gold);padding:10px;border-radius:6px;margin:6px 0}
   .mods{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
   .mod{background:#1a2743;border-radius:6px;padding:6px 8px;font-size:11px}
@@ -69,15 +69,16 @@
   .bar{height:8px;background:#0a1526;border-radius:6px;overflow:hidden;margin-top:6px}
   .bar > div{height:100%;background:linear-gradient(90deg,var(--ok),var(--acc2))}
   .flex-between{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
-  pre{background:#0a1526;padding:10px;border-radius:8px;overflow:auto;font-size:12px;max-height:400px;border:1px solid var(--line)}
   .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
-  .modal{background:var(--panel);border-radius:14px;padding:18px;max-width:820px;width:100%;max-height:88vh;overflow:auto;border:1px solid var(--line)}
+  .modal{background:var(--panel);border-radius:14px;padding:18px;max-width:900px;width:100%;max-height:88vh;overflow:auto;border:1px solid var(--line)}
   .toast{position:fixed;bottom:20px;right:20px;background:var(--ok);color:#04140a;padding:12px 18px;border-radius:10px;font-weight:700;z-index:200;opacity:0;transition:.3s;pointer-events:none}
   .toast.show{opacity:1}
   .toast.err{background:var(--err);color:#fff}
+  .toast.warn{background:var(--warn);color:#111}
   .tabs-inner{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
   .tabs-inner .tab{font-size:12px;padding:6px 11px;background:#1a2743}
   .tabs-inner .tab.on{background:var(--acc2);color:#04121f}
+  .subcard{background:var(--panel2);border-radius:10px;padding:12px;border-left:3px solid var(--acc2)}
 
   @media print{
     body{background:#fff;color:#000;font-size:11px}
@@ -97,10 +98,11 @@
 <body>
 
 <header class="top no-print">
-  <h1>🧰 <b>OrçaPro</b> · Móveis Planejados</h1>
+  <h1>🧰 <b>OrçaPro v2.3</b> · Móveis Planejados</h1>
   <span id="nuvemStatus" class="pill" style="font-size:11px">☁️ Offline</span>
+  <span id="templateStatus" class="pill" style="font-size:11px">⚙️ —</span>
   <span class="sp"></span>
-  <button class="btn ok sm" onclick="salvarNoSheets()">☁️ Salvar na Nuvem</button>
+  <button class="btn ok sm" onclick="salvarNoSheets()">☁️ Salvar Projeto</button>
   <button class="btn sec sm" onclick="abrirListaNuvem()">📂 Abrir da Nuvem</button>
   <button class="btn sec sm" onclick="diagnosticoNuvem()">🩺 Diagnóstico</button>
   <button class="btn sec sm" onclick="exportJSON()">💾 Exportar</button>
@@ -147,7 +149,7 @@
         <input type="number" id="ambP" placeholder="Prof. (mm)" style="width:130px">
         <button onclick="addAmbiente()">+ Ambiente</button>
       </div>
-      <p class="small" style="margin:8px 0 0 0">💡 A <b>largura</b> é o total do ambiente (ex.: 5000mm). Depois você adiciona <b>vãos</b> até completar essa largura. Use <b>÷ Dividir</b> para gerar vários vãos automaticamente.</p>
+      <p class="small" style="margin:8px 0 0 0">💡 A <b>largura</b> é o total do ambiente. Use <b>÷ Dividir</b> para gerar vários vãos automaticamente.</p>
     </div>
 
     <div id="listaAmb"></div>
@@ -157,7 +159,12 @@
   <section id="tab-comp" class="hidden">
     <div class="card">
       <h2>Composição por Tipo de Vão</h2>
-      <p class="small">Defina o que cada tipo consome. Variáveis: <b>L</b> largura, <b>A</b> altura, <b>P</b> profundidade, <b>N</b> nº gavetas/portas. Fórmulas ex.: <code>2*N</code>, <code>N+1</code>.</p>
+      <div class="row no-print" style="margin-bottom:10px">
+        <button class="btn ok sm" onclick="salvarComoTemplate()">💾 Salvar como padrão (nuvem)</button>
+        <button class="btn sec sm" onclick="carregarTemplateDaNuvem()">☁️ Baixar padrão da nuvem</button>
+        <button class="btn warn sm" onclick="restaurarFabrica()">↩️ Restaurar de fábrica</button>
+      </div>
+      <p class="small">Defina o que cada tipo consome. Variáveis: <b>L</b> largura · <b>A</b> altura · <b>P</b> profundidade · <b>N</b> nº gavetas/portas.</p>
       <div class="tabs-inner" id="tabsTipoVao"></div>
       <div id="editorTipoVao"></div>
     </div>
@@ -228,7 +235,7 @@
       <h2>Orçamentos Salvos Localmente</h2>
       <div class="row no-print" style="margin-bottom:10px">
         <button class="btn ok" onclick="salvarOrcamento()">💾 Salvar localmente</button>
-        <button class="btn sec" onclick="novoOrcamento()">📄 Novo (limpa atual)</button>
+        <button class="btn sec" onclick="novoOrcamento()">📄 Novo (mantém padrões)</button>
       </div>
       <div id="listaHist"></div>
     </div>
@@ -240,7 +247,7 @@
 
 <script>
 /* =====================================================================
-   OrçaPro v2.2 — Modelo de dados
+   OrçaPro v2.3 — Modelo de dados
    ===================================================================== */
 const TIPOS_VAO = {
   gaveta:        { nome:"Gaveta (vão)",       icone:"🗄️" },
@@ -339,7 +346,13 @@ const COMP_DEFAULT = {
     acess: [
       { matId:"a_dobradica", qtdFormula:"2" },
       { matId:"a_puxador",   qtdFormula:"1" }
-    ]
+    ],
+    prateleiras: {
+      ativo:false, qtd:2,
+      vidro:  { matId:"v_temperado", descL:6, descA:6 },
+      perfil: { matId:"p_montante",  desc:0, orientacao:"L" },
+      acess:  { matId:"a_suporte",   porPrateleira:2 }
+    }
   },
   porta_dupla: {
     perfis: [
@@ -352,7 +365,13 @@ const COMP_DEFAULT = {
     acess: [
       { matId:"a_dobradica", qtdFormula:"4" },
       { matId:"a_puxador",   qtdFormula:"2" }
-    ]
+    ],
+    prateleiras: {
+      ativo:false, qtd:2,
+      vidro:  { matId:"v_temperado", descL:6, descA:6 },
+      perfil: { matId:"p_montante",  desc:0, orientacao:"L" },
+      acess:  { matId:"a_suporte",   porPrateleira:2 }
+    }
   }
 };
 
@@ -378,7 +397,8 @@ const MAT_DEFAULT = {
     { id:"a_dobradica", nome:"Dobradiça", preco:6.5 },
     { id:"a_corredica", nome:"Corrediça", preco:22 },
     { id:"a_puxador",   nome:"Puxador",   preco:18 },
-    { id:"a_fechadura", nome:"Fechadura", preco:35 }
+    { id:"a_fechadura", nome:"Fechadura", preco:35 },
+    { id:"a_suporte",   nome:"Suporte de Prateleira", preco:3.5 }
   ]
 };
 
@@ -394,6 +414,7 @@ const PARAMS_DEFAULT = {
    ===================================================================== */
 let state = novoEstado();
 let hist = [];
+let templateNuvem = null;   // { savedAt, composicoes, materiais, params }
 
 function novoEstado(){
   return {
@@ -424,8 +445,8 @@ function normalizeState(s){
 function save(){
   try{
     state = normalizeState(state);
-    const payload = { v:2, savedAt:new Date().toISOString(), state };
-    localStorage.setItem("orcPro_v2", JSON.stringify(payload));
+    const payload = { v:3, savedAt:new Date().toISOString(), state };
+    localStorage.setItem("orcPro_v3", JSON.stringify(payload));
     if(typeof agendarSyncSheets === "function") agendarSyncSheets();
   }catch(e){
     console.error("Erro ao salvar:", e);
@@ -435,7 +456,7 @@ function save(){
 
 function load(){
   try{
-    const raw = localStorage.getItem("orcPro_v2");
+    const raw = localStorage.getItem("orcPro_v3") || localStorage.getItem("orcPro_v2");
     if(raw){
       const d = JSON.parse(raw);
       state = normalizeState(d.state || d);
@@ -460,15 +481,15 @@ function fmt(v){ return (v||0).toLocaleString("pt-BR",{style:"currency",currency
 function fmtN(v,d=2){ return (v||0).toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d}); }
 function toast(msg, err){
   const t = document.getElementById("toast");
-  t.textContent = msg; t.className = "toast show" + (err?" err":"");
-  setTimeout(()=>t.className="toast", 2200);
+  const cls = err ? "toast show err" : (err === false ? "toast show warn" : "toast show");
+  t.textContent = msg; t.className = cls;
+  setTimeout(()=>t.className="toast", 2400);
 }
 function escapeHtml(s){ return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function matById(id){
   for(const cat of Object.values(state.materiais)) for(const m of cat) if(m.id===id) return m;
   return null;
 }
-
 function evalFormula(formula, vars){
   if(formula===""||formula==null) return 0;
   try{
@@ -479,7 +500,7 @@ function evalFormula(formula, vars){
 }
 
 /* =====================================================================
-   CÁLCULO
+   CÁLCULO DE VÃO
    ===================================================================== */
 function calcularVao(vao, movel){
   const comp = state.composicoes[vao.tipo];
@@ -493,29 +514,35 @@ function calcularVao(vao, movel){
 
   const resultado = { perfis:[], vidros:[], acm:[], acess:{}, custo:{perfis:0,vidros:0,acm:0,acess:0,total:0} };
 
-  comp.perfis.forEach(it=>{
+  // PERFIS
+  (comp.perfis||[]).forEach(it=>{
     const qtd = Math.round(evalFormula(it.qtdFormula, vars));
     if(qtd<=0) return;
     const desc = +it.desc || 0;
     for(let i=0;i<qtd;i++){
       let c = it.orientacao==="L" ? L : it.orientacao==="A" ? A : P;
       c = Math.max(0, Math.round(c - desc));
-      resultado.perfis.push({ matId:it.matId, comprimento:c });
+      resultado.perfis.push({ matId:it.matId, comprimento:c, origem:"base" });
     }
   });
 
-  comp.vidros.forEach(it=>{
+  // VIDROS base
+  (comp.vidros||[]).forEach(it=>{
     const qtd = Math.round(evalFormula(it.qtdFormula, vars));
     if(qtd<=0) return;
     const descL = +it.descL || 0;
     const descA = +it.descA || 0;
     for(let i=0;i<qtd;i++){
       let larg, alt;
-      if(it.orientacao==="porta"){
-        larg = (L - descL*(qtd+1)) / qtd;
-        alt  = A - descA;
-      } else {
-        larg = L - descL; alt = A - descA;
+      switch(it.orientacao){
+        case "porta":
+          larg = (L - descL*(qtd+1)) / qtd;
+          alt  = A - descA;
+          break;
+        case "LA": larg = L - descL; alt = A - descA; break;
+        case "LP": larg = L - descL; alt = P - descA; break;
+        case "AP": larg = A - descL; alt = P - descA; break;
+        default:   larg = L - descL; alt = A - descA;
       }
       larg = Math.max(0, Math.round(larg));
       alt  = Math.max(0, Math.round(alt));
@@ -523,7 +550,39 @@ function calcularVao(vao, movel){
     }
   });
 
-  comp.acm.forEach(it=>{
+  // PRATELEIRAS (só se ativo no template E marcado no vão)
+  if(comp.prateleiras && comp.prateleiras.ativo && vao.temPrateleiras){
+    const p = comp.prateleiras;
+    const qtdPrat = Math.max(0, +vao.qtdPrateleiras || p.qtd || 0);
+    if(qtdPrat > 0){
+      const pv = p.vidro || {};
+      const largVidro = Math.max(0, L - (+pv.descL || 0));
+      const altVidro  = Math.max(0, P - (+pv.descA || 0));
+      for(let i=0;i<qtdPrat;i++){
+        if(largVidro>0 && altVidro>0){
+          resultado.vidros.push({
+            matId: pv.matId || "v_temperado",
+            largura: largVidro, altura: altVidro,
+            rotulo: "Prateleira " + (i+1)
+          });
+        }
+      }
+      const pp = p.perfil || {};
+      if(pp.matId){
+        const compP = (pp.orientacao === "A" ? A : pp.orientacao === "P" ? P : L) - (+pp.desc || 0);
+        for(let i=0;i<qtdPrat;i++){
+          resultado.perfis.push({ matId: pp.matId, comprimento: Math.max(0, Math.round(compP)), origem:"prateleira" });
+        }
+      }
+      const pa = p.acess || {};
+      if(pa.matId && pa.porPrateleira){
+        resultado.acess[pa.matId] = (resultado.acess[pa.matId] || 0) + qtdPrat * (+pa.porPrateleira);
+      }
+    }
+  }
+
+  // ACM
+  (comp.acm||[]).forEach(it=>{
     const qtd = Math.round(evalFormula(it.qtdFormula, vars));
     if(qtd<=0) return;
     const descL = +it.descL || 0;
@@ -543,12 +602,14 @@ function calcularVao(vao, movel){
     }
   });
 
-  comp.acess.forEach(it=>{
+  // ACESSÓRIOS
+  (comp.acess||[]).forEach(it=>{
     const qtd = Math.round(evalFormula(it.qtdFormula, vars));
     if(qtd<=0) return;
     resultado.acess[it.matId] = (resultado.acess[it.matId]||0) + qtd;
   });
 
+  // CUSTOS
   resultado.perfis.forEach(p=>{ const m = matById(p.matId); if(m) resultado.custo.perfis += (m.preco||0) * (p.comprimento/1000); });
   resultado.vidros.forEach(p=>{ const m = matById(p.matId); if(m) resultado.custo.vidros += (m.preco||0) * (p.largura*p.altura/1_000_000); });
   resultado.acm.forEach(p=>{ const m = matById(p.matId); if(m) resultado.custo.acm += (m.preco||0) * (p.largura*p.altura/1_000_000); });
@@ -727,7 +788,7 @@ function cortarChapas(pecas, chapa){
 }
 
 /* =====================================================================
-   SINCRONIZAÇÃO COM GOOGLE SHEETS
+   GOOGLE SHEETS
    ===================================================================== */
 const SHEETS_API = "https://script.google.com/macros/s/AKfycbyiSKxFpYXZVSiWvLTPzoG1FCsRrP0bSDkq2jgafoZQOyDWethgp-yeiW8AocGZbq8Ncg/exec";
 
@@ -784,7 +845,6 @@ async function carregarDoSheets(id){
     const r = await sheetsRequest("carregar", { id });
     if(!r.projeto) throw new Error("Projeto vazio");
     const p = r.projeto;
-
     state = normalizeState({
       orcamento: {
         id: p.id, numero: p.numero, cliente: p.cliente,
@@ -796,18 +856,16 @@ async function carregarDoSheets(id){
       composicoes: p.composicoes || state.composicoes,
       params:      p.params      || state.params
     });
-    save();
-    render();
+    save(); render();
     toast("☁️ Carregado: " + (p.numero || p.id));
   }catch(e){
     toast("Erro ao carregar: " + e.message, true);
-    console.error(e);
   }
 }
 
 async function listarDoSheets(){
-  try{ const r = await sheetsRequest("listar"); return r.lista || []; }
-  catch(e){ throw e; }
+  const r = await sheetsRequest("listar");
+  return r.lista || [];
 }
 
 async function excluirDoSheets(id){
@@ -818,7 +876,6 @@ async function excluirDoSheets(id){
   }catch(e){ toast("Erro: " + e.message, true); }
 }
 
-/* ====== DIAGNÓSTICO ====== */
 async function diagnosticoNuvem(){
   document.getElementById("modalRoot").innerHTML = `
     <div class="modal-bg" onclick="if(event.target===this)fecharModal()">
@@ -829,51 +886,37 @@ async function diagnosticoNuvem(){
       </div>
     </div>`;
   const box = document.getElementById("diagBox");
+  let html = `<p><b>URL:</b><br><code style="font-size:11px">${escapeHtml(SHEETS_API)}</code></p>`;
 
-  let html = "";
-  html += `<p><b>1) URL configurada:</b><br><code style="font-size:11px">${escapeHtml(SHEETS_API)}</code></p>`;
-
-  // Teste ping
   try{
     const t0 = Date.now();
-    const r = await sheetsRequest("ping");
-    html += `<p class="pill ok">✔️ ping OK em ${Date.now()-t0}ms</p>`;
+    await sheetsRequest("ping");
+    html += `<p class="pill ok">✔️ ping OK (${Date.now()-t0}ms)</p>`;
   }catch(e){
     html += `<p class="pill err">❌ ping falhou: ${escapeHtml(e.message)}</p>`;
-    html += `<p class="small">Verifique: a URL está correta? O Web App está publicado como "Qualquer pessoa"? Você fez "Nova versão" no Gerenciar implantações?</p>`;
-    box.innerHTML = html;
-    return;
+    box.innerHTML = html; return;
   }
-
-  // Teste listar
   try{
     const r = await sheetsRequest("listar");
     const lista = r.lista || [];
-    html += `<p class="pill ${lista.length?'ok':'warn'}">${lista.length ? '✔️' : '⚠️'} listar retornou ${lista.length} projeto(s)</p>`;
-    if(!lista.length){
-      html += `<p class="small">A planilha pode estar sem cabeçalho. Rode a função <code>setup()</code> no Apps Script (menu Executar) para criar as abas e cabeçalhos.</p>`;
-    }
-  }catch(e){
-    html += `<p class="pill err">❌ listar falhou: ${escapeHtml(e.message)}</p>`;
-  }
+    html += `<p class="pill ${lista.length?'ok':'warn'}">${lista.length?'✔️':'⚠️'} listar: ${lista.length} projeto(s)</p>`;
+  }catch(e){ html += `<p class="pill err">❌ listar: ${escapeHtml(e.message)}</p>`; }
 
-  // Teste salvar
   try{
     const idTeste = "DIAG-" + Date.now();
     const r = await sheetsRequest("salvar", {
-      id: idTeste, cliente:"DIAGNOSTICO", numero:"DIAG", data: new Date().toISOString().slice(0,10),
+      id: idTeste, cliente:"DIAG", numero:"DIAG", data: new Date().toISOString().slice(0,10),
       vendedor:"", ambientes:[], materiais:{}, composicoes:{}, params:{}
     });
-    html += `<p class="pill ok">✔️ salvar OK (id=${escapeHtml(r.id)})</p>`;
-    try{
-      await sheetsRequest("excluir", { id: r.id });
-      html += `<p class="pill ok">✔️ registro de teste removido</p>`;
-    }catch(e2){
-      html += `<p class="small">⚠️ Não consegui remover o registro de teste (${escapeHtml(e2.message)}). Remova manualmente na planilha.</p>`;
-    }
-  }catch(e){
-    html += `<p class="pill err">❌ salvar falhou: ${escapeHtml(e.message)}</p>`;
-  }
+    html += `<p class="pill ok">✔️ salvar OK</p>`;
+    try{ await sheetsRequest("excluir", { id: r.id }); html += `<p class="pill ok">✔️ limpeza OK</p>`; }catch(e2){}
+  }catch(e){ html += `<p class="pill err">❌ salvar: ${escapeHtml(e.message)}</p>`; }
+
+  try{
+    const r = await sheetsRequest("carregarTemplate");
+    const t = r.template;
+    html += `<p class="pill ${t?'ok':'warn'}">${t?'✔️':'⚠️'} template: ${t ? "salvo em "+new Date(t.savedAt).toLocaleString("pt-BR") : "não configurado"}</p>`;
+  }catch(e){ html += `<p class="pill err">❌ template: ${escapeHtml(e.message)}</p>`; }
 
   box.innerHTML = html;
 }
@@ -881,60 +924,27 @@ async function diagnosticoNuvem(){
 async function abrirListaNuvem(){
   toast("Carregando…");
   let lista = [];
-  try{
-    lista = await listarDoSheets();
-  }catch(e){
+  try{ lista = await listarDoSheets(); }
+  catch(e){
     document.getElementById("modalRoot").innerHTML = `
       <div class="modal-bg" onclick="if(event.target===this)fecharModal()">
         <div class="modal">
           <h2 style="color:var(--err)">❌ Erro ao conectar</h2>
           <p><b>Mensagem:</b> ${escapeHtml(e.message)}</p>
-          <h3>Checklist</h3>
-          <ol class="small">
-            <li>Você rodou <code>setup()</code> no Apps Script? (menu Executar)</li>
-            <li>Fez <b>Nova versão</b> em Implantar → Gerenciar implantações?</li>
-            <li>A URL <code>SHEETS_API</code> no HTML é a atual?</li>
-            <li>"Quem tem acesso" está como <b>Qualquer pessoa</b>?</li>
-          </ol>
           <button class="btn sec" onclick="fecharModal()">Fechar</button>
           <button class="btn" onclick="fecharModal();diagnosticoNuvem()">🩺 Diagnóstico</button>
         </div>
       </div>`;
     return;
   }
-
-  if(!lista.length){
-    document.getElementById("modalRoot").innerHTML = `
-      <div class="modal-bg" onclick="if(event.target===this)fecharModal()">
-        <div class="modal">
-          <h2 style="color:var(--warn)">⚠️ Conectado, mas nenhum projeto retornado</h2>
-          <p>O servidor respondeu, mas não achou nenhum registro válido.</p>
-          <h3>Como resolver</h3>
-          <ol class="small">
-            <li>Abra a planilha <b>OrçaPro_DB</b>.</li>
-            <li>Verifique se a linha 1 da aba <b>orcamentos</b> tem exatamente:
-              <br><code style="font-size:10.5px">id | cliente | numero | data | vendedor | ambientes_json | materiais_json | composicoes_json | params_json | updated_at</code>
-            </li>
-            <li>Se estiver vazia ou diferente, rode no editor do Apps Script a função <code>setup()</code>.</li>
-            <li>Clique em <b>☁️ Salvar na Nuvem</b> no app. Abra a planilha — deve aparecer uma linha nova.</li>
-            <li>Se a linha aparecer mas o app ainda não listar, a coluna <b>A</b> (id) está vazia. Rode <code>setup()</code>.</li>
-          </ol>
-          <button class="btn sec" onclick="fecharModal()">Fechar</button>
-          <button class="btn" onclick="fecharModal();diagnosticoNuvem()">🩺 Diagnóstico</button>
-        </div>
-      </div>`;
-    return;
-  }
+  if(!lista.length){ toast("Nenhum projeto na nuvem", false); return; }
 
   document.getElementById("modalRoot").innerHTML = `
     <div class="modal-bg" onclick="if(event.target===this)fecharModal()">
       <div class="modal">
         <div class="flex-between" style="margin-bottom:10px">
           <h2 style="color:var(--acc2);margin:0">📂 Projetos na Nuvem (${lista.length})</h2>
-          <div class="row">
-            <button class="btn sec sm" onclick="fecharModal();salvarNoSheets()">⬆️ Salvar atual</button>
-            <button class="btn err sm" onclick="fecharModal()">✕</button>
-          </div>
+          <button class="btn err sm" onclick="fecharModal()">✕</button>
         </div>
         <table>
           <thead><tr><th>Nº</th><th>Cliente</th><th>Data</th><th>Atualizado</th><th></th></tr></thead>
@@ -967,12 +977,79 @@ function atualizarStatusNuvem(status){
 function fecharModal(){ document.getElementById("modalRoot").innerHTML = ""; }
 
 /* =====================================================================
-   DIVISOR AUTOMÁTICO DE VÃOS
+   TEMPLATE — salvar/como padrão na nuvem
+   ===================================================================== */
+async function salvarComoTemplate(){
+  try{
+    toast("☁️ Salvando template…");
+    const tpl = {
+      savedAt:     new Date().toISOString(),
+      composicoes: state.composicoes,
+      materiais:   state.materiais,
+      params:      state.params
+    };
+    await sheetsRequest("salvarTemplate", tpl);
+    templateNuvem = tpl;
+    atualizarStatusTemplate();
+    toast("✔️ Padrão salvo na nuvem!");
+  }catch(e){
+    toast("Erro: " + e.message, true);
+  }
+}
+
+async function carregarTemplateDaNuvem(){
+  try{
+    toast("☁️ Baixando padrão…");
+    const r = await sheetsRequest("carregarTemplate");
+    const t = r.template;
+    if(!t){ toast("Nenhum padrão na nuvem", false); return; }
+    templateNuvem = t;
+    if(t.composicoes) state.composicoes = t.composicoes;
+    if(t.materiais)   state.materiais   = t.materiais;
+    if(t.params)      state.params      = t.params;
+    save(); render();
+    atualizarStatusTemplate();
+    toast("✔️ Padrão carregado da nuvem!");
+  }catch(e){
+    toast("Erro: " + e.message, true);
+  }
+}
+
+function restaurarFabrica(){
+  if(!confirm("Restaurar composições de fábrica? Isso apaga as personalizações atuais (você precisará salvar novamente para atualizar a nuvem).")) return;
+  state.composicoes = JSON.parse(JSON.stringify(COMP_DEFAULT));
+  state.materiais   = JSON.parse(JSON.stringify(MAT_DEFAULT));
+  state.params      = JSON.parse(JSON.stringify(PARAMS_DEFAULT));
+  save(); render();
+  toast("↩️ Restaurado de fábrica");
+}
+
+function atualizarStatusTemplate(){
+  const el = document.getElementById("templateStatus");
+  if(!el) return;
+  if(templateNuvem && templateNuvem.savedAt){
+    el.textContent = "⚙️ Padrão: " + new Date(templateNuvem.savedAt).toLocaleDateString("pt-BR");
+    el.className = "pill ok";
+  } else {
+    el.textContent = "⚙️ Padrão: não definido";
+    el.className = "pill warn";
+  }
+}
+
+// Auto-carrega template no início
+async function carregarTemplateInicial(){
+  try{
+    const r = await sheetsRequest("carregarTemplate");
+    if(r.template){ templateNuvem = r.template; atualizarStatusTemplate(); }
+  }catch(e){ /* offline */ }
+}
+
+/* =====================================================================
+   DIVISOR DE VÃOS
    ===================================================================== */
 function abrirDivisor(aid){
   const amb = state.ambientes.find(a=>a.id===aid);
   if(!amb){ toast("Ambiente não encontrado", true); return; }
-
   const usada = (amb.vaos||[]).reduce((s,v)=>s+(+v.largura||0),0);
   const livre = amb.largura - usada;
 
@@ -980,57 +1057,35 @@ function abrirDivisor(aid){
     <div class="modal-bg" onclick="if(event.target===this)fecharModal()">
       <div class="modal">
         <h2 style="color:var(--acc2)">÷ Dividir Largura do Ambiente</h2>
-        <p class="small">
-          <b>${escapeHtml(amb.nome)}</b> — largura total <b>${amb.largura} mm</b><br>
-          Já usado: <b>${usada} mm</b> · Livre: <b>${livre} mm</b>
-        </p>
-
+        <p class="small"><b>${escapeHtml(amb.nome)}</b> — total <b>${amb.largura} mm</b> · usado <b>${usada} mm</b> · livre <b>${livre} mm</b></p>
         <div class="grid g3" style="margin-top:12px">
-          <div>
-            <label>Modo</label>
+          <div><label>Modo</label>
             <select id="divModo" onchange="atualizarDivisor('${aid}')">
               <option value="qtd">Por quantidade de vãos</option>
               <option value="larg">Por largura de cada vão</option>
             </select>
           </div>
-          <div>
-            <label>Qtd de vãos</label>
-            <input type="number" id="divQtd" min="1" max="50" value="5" onchange="atualizarDivisor('${aid}')">
-          </div>
-          <div>
-            <label>Largura de cada (mm)</label>
-            <input type="number" id="divLarg" min="1" value="1000" onchange="atualizarDivisor('${aid}')">
-          </div>
+          <div><label>Qtd de vãos</label><input type="number" id="divQtd" min="1" max="50" value="5" onchange="atualizarDivisor('${aid}')"></div>
+          <div><label>Largura de cada (mm)</label><input type="number" id="divLarg" min="1" value="1000" onchange="atualizarDivisor('${aid}')"></div>
         </div>
-
         <div class="grid g3" style="margin-top:12px">
-          <div>
-            <label>Tipo padrão dos vãos</label>
+          <div><label>Tipo padrão</label>
             <select id="divTipo" onchange="atualizarDivisor('${aid}')">
               ${Object.entries(TIPOS_VAO).map(([k,v])=>`<option value="${k}">${v.icone} ${v.nome}</option>`).join("")}
             </select>
           </div>
-          <div>
-            <label>Nº padrão (gavetas/portas)</label>
-            <input type="number" id="divN" min="1" value="1" onchange="atualizarDivisor('${aid}')">
-          </div>
-          <div>
-            <label>Descrição padrão</label>
-            <input id="divDesc" value="Módulo" onchange="atualizarDivisor('${aid}')">
-          </div>
+          <div><label>Nº padrão</label><input type="number" id="divN" min="1" value="1" onchange="atualizarDivisor('${aid}')"></div>
+          <div><label>Descrição</label><input id="divDesc" value="Módulo" onchange="atualizarDivisor('${aid}')"></div>
         </div>
-
         <h3>Prévia</h3>
-        <div id="divPrevia" style="margin-top:8px"></div>
-
+        <div id="divPrevia"></div>
         <div class="row" style="margin-top:14px;justify-content:flex-end">
           <button class="btn sec" onclick="fecharModal()">Cancelar</button>
           <button class="btn err" onclick="limparVaos('${aid}')">🗑️ Limpar vãos</button>
-          <button class="btn ok" onclick="aplicarDivisor('${aid}')">✔️ Aplicar divisão</button>
+          <button class="btn ok" onclick="aplicarDivisor('${aid}')">✔️ Aplicar</button>
         </div>
       </div>
     </div>`;
-
   atualizarDivisor(aid);
 }
 
@@ -1039,22 +1094,12 @@ function atualizarDivisor(aid){
   if(!amb) return;
   const usada = (amb.vaos||[]).reduce((s,v)=>s+(+v.largura||0),0);
   const livre = amb.largura - usada;
-
   const modo  = document.getElementById("divModo").value;
   const qtd   = Math.max(1, +document.getElementById("divQtd").value || 1);
   const larg  = Math.max(1, +document.getElementById("divLarg").value || 100);
-
   let nV, lV, sobra;
-  if(modo === "qtd"){
-    nV = qtd;
-    lV = Math.floor(livre / nV);
-    sobra = livre - (lV * nV);
-  } else {
-    nV = Math.max(1, Math.floor(livre / larg));
-    lV = larg;
-    sobra = livre - (nV * larg);
-  }
-
+  if(modo === "qtd"){ nV = qtd; lV = Math.floor(livre/nV); sobra = livre - lV*nV; }
+  else              { nV = Math.max(1, Math.floor(livre/larg)); lV = larg; sobra = livre - nV*larg; }
   const tipo = document.getElementById("divTipo").value;
   const nPad = Math.max(1, +document.getElementById("divN").value || 1);
   const desc = document.getElementById("divDesc").value || "Módulo";
@@ -1062,20 +1107,13 @@ function atualizarDivisor(aid){
   let html = `<table><thead><tr><th>#</th><th>Descrição</th><th>Tipo</th><th style="text-align:right">Larg. (mm)</th><th style="text-align:right">Nº</th></tr></thead><tbody>`;
   for(let i=0;i<nV;i++){
     const w = (i === nV-1) ? (lV + sobra) : lV;
-    html += `<tr>
-      <td>${i+1}</td>
-      <td>${escapeHtml(desc)} ${i+1}</td>
+    html += `<tr><td>${i+1}</td><td>${escapeHtml(desc)} ${i+1}</td>
       <td>${TIPOS_VAO[tipo].icone} ${TIPOS_VAO[tipo].nome}</td>
       <td style="text-align:right"><b>${w}</b></td>
-      <td style="text-align:right">${nPad}</td>
-    </tr>`;
+      <td style="text-align:right">${nPad}</td></tr>`;
   }
   html += `</tbody></table>
-    <p class="small" style="margin-top:8px">
-      <b>${nV} vãos</b> de <b>${lV} mm</b>${sobra>0?` · o último vão terá <b>${lV+sobra} mm</b> (+${sobra}mm)`:""} ·
-      Total ocupado: <b>${nV*lV+sobra} mm</b> de <b>${livre} mm</b> livres
-    </p>`;
-
+    <p class="small" style="margin-top:8px"><b>${nV} vãos</b> de <b>${lV} mm</b>${sobra>0?` · último: <b>${lV+sobra} mm</b> (+${sobra}mm)`:""} · Total <b>${nV*lV+sobra} mm</b></p>`;
   document.getElementById("divPrevia").innerHTML = html;
 }
 
@@ -1084,34 +1122,22 @@ function aplicarDivisor(aid){
   if(!amb) return;
   const usada = (amb.vaos||[]).reduce((s,v)=>s+(+v.largura||0),0);
   const livre = amb.largura - usada;
-
   const modo = document.getElementById("divModo").value;
   const qtd  = Math.max(1, +document.getElementById("divQtd").value || 1);
   const larg = Math.max(1, +document.getElementById("divLarg").value || 100);
-
   const tipo = document.getElementById("divTipo").value;
   const nPad = Math.max(1, +document.getElementById("divN").value || 1);
   const desc = document.getElementById("divDesc").value || "Módulo";
-
   let nV, lV, sobra;
-  if(modo === "qtd"){
-    nV = qtd;
-    lV = Math.floor(livre / nV);
-    sobra = livre - (lV * nV);
-  } else {
-    nV = Math.max(1, Math.floor(livre / larg));
-    lV = larg;
-    sobra = livre - (nV * larg);
-  }
+  if(modo === "qtd"){ nV = qtd; lV = Math.floor(livre/nV); sobra = livre - lV*nV; }
+  else              { nV = Math.max(1, Math.floor(livre/larg)); lV = larg; sobra = livre - nV*larg; }
 
   for(let i=0;i<nV;i++){
     const w = (i === nV-1) ? (lV + sobra) : lV;
     amb.vaos.push({
-      id: uid(),
-      tipo: tipo,
-      descricao: `${desc} ${i+1}`,
-      largura: w,
-      gavetasPortas: nPad
+      id: uid(), tipo, descricao: `${desc} ${i+1}`,
+      largura: w, gavetasPortas: nPad,
+      temPrateleiras: false, qtdPrateleiras: 0
     });
   }
   save(); render(); fecharModal();
@@ -1159,6 +1185,10 @@ function render(){
   renderProposta(g);
   renderCompra(g);
   renderHistorico();
+  atualizarStatusTemplate();
+
+  // Segurança input file
+  document.querySelectorAll('input[type="file"]').forEach(el => { el.value = ""; });
 }
 
 function setOrc(k,v){ state.orcamento[k]=v; save(); }
@@ -1183,7 +1213,7 @@ function addVao(aid){
   const amb = state.ambientes.find(a=>a.id===aid);
   const usada = (amb.vaos||[]).reduce((s,v)=>s+(+v.largura||0),0);
   if(usada + 500 > amb.largura){ toast("Largura excede o ambiente", true); return; }
-  amb.vaos.push({ id:uid(), tipo:"porta_simples", descricao:"Módulo", largura:500, gavetasPortas:1 });
+  amb.vaos.push({ id:uid(), tipo:"porta_simples", descricao:"Módulo", largura:500, gavetasPortas:1, temPrateleiras:false, qtdPrateleiras:0 });
   save(); render();
 }
 
@@ -1231,7 +1261,7 @@ function renderAmbientes(){
         <div><label>Profundidade (mm)</label><input type="number" value="${a.profundidade}" onchange="setAmb('profundidade',+this.value,'${a.id}')"></div>
       </div>
       <div style="margin-top:10px">
-        ${(a.vaos||[]).map(v=>renderVao(a,v)).join("") || '<p class="small">Sem vãos. Use "+ Vão" ou "÷ Dividir".</p>'}
+        ${(a.vaos||[]).map(v=>renderVao(a,v)).join("") || '<p class="small">Sem vãos.</p>'}
       </div>
     </div>`;
   }).join("");
@@ -1241,6 +1271,9 @@ function renderVao(a, v){
   const t = TIPOS_VAO[v.tipo];
   const gav = (v.tipo==="gaveta"||v.tipo==="gaveta_dupla");
   const portas = (v.tipo==="porta_simples"||v.tipo==="porta_dupla"||v.tipo==="porta_tempero");
+  const comp = state.composicoes[v.tipo];
+  const temPrat = !!(comp && comp.prateleiras && comp.prateleiras.ativo);
+
   return `
   <div class="vao">
     <div class="flex-between">
@@ -1249,7 +1282,8 @@ function renderVao(a, v){
         <input value="${escapeHtml(v.descricao||'')}" onchange="upVao('${a.id}','${v.id}','descricao',this.value)" style="width:160px" placeholder="Descrição">
         <span class="pill">L ${v.largura}mm</span>
         ${gav? `<span class="pill">${v.gavetasPortas} gaveta(s)</span>`:""}
-        ${portas? `<span class="pill">${v.gavetasPortas} porta(s)</span>`:""}
+        ${portas && !temPrat ? `<span class="pill">${v.gavetasPortas} porta(s)</span>`:""}
+        ${temPrat && v.temPrateleiras ? `<span class="pill ok">📚 ${v.qtdPrateleiras||0} prat.</span>`:""}
         <span class="pill ok">${fmt(v._custo?.total||0)}</span>
       </div>
       <button class="btn err xs no-print" onclick="removeVao('${a.id}','${v.id}')">✕</button>
@@ -1265,6 +1299,16 @@ function renderVao(a, v){
         <input type="number" min="1" value="${v.gavetasPortas||1}" onchange="upVao('${a.id}','${v.id}','gavetasPortas',+this.value)">
       </div>
     </div>
+    ${temPrat ? `
+      <div class="subcard no-print" style="margin-top:8px">
+        <div class="row">
+          <label style="margin:0"><input type="checkbox" ${v.temPrateleiras?"checked":""} onchange="upVao('${a.id}','${v.id}','temPrateleiras',this.checked)" style="margin-right:6px"> 📚 Incluir prateleiras neste vão</label>
+          ${v.temPrateleiras ? `
+            <div><label>Qtd prateleiras</label><input type="number" min="1" value="${v.qtdPrateleiras||comp.prateleiras.qtd||2}" onchange="upVao('${a.id}','${v.id}','qtdPrateleiras',+this.value)" style="width:90px"></div>
+          `:""}
+        </div>
+      </div>
+    `:""}
     ${v._detalhe? `
       <div class="mods">
         <span class="mod">🔩 ${v._detalhe.perfis.length} perfis</span>
@@ -1288,20 +1332,66 @@ function renderEditorComposicoes(){
     `<div class="tab ${compTabAtual===k?"on":""}" onclick="compTabAtual='${k}';compSubTab='perfis';renderEditorComposicoes()">${t.icone} ${t.nome}</div>`
   ).join("");
   const comp = state.composicoes[compTabAtual];
+  const temPrat = !!comp.prateleiras;
+
   document.getElementById("editorTipoVao").innerHTML = `
     <div class="tabs-inner">
       <div class="tab ${compSubTab==='perfis'?'on':''}" onclick="compSubTab='perfis';renderEditorComposicoes()">🔩 Perfis</div>
       <div class="tab ${compSubTab==='vidros'?'on':''}" onclick="compSubTab='vidros';renderEditorComposicoes()">🪟 Vidros</div>
       <div class="tab ${compSubTab==='acm'?'on':''}" onclick="compSubTab='acm';renderEditorComposicoes()">🧱 ACM</div>
       <div class="tab ${compSubTab==='acess'?'on':''}" onclick="compSubTab='acess';renderEditorComposicoes()">🔧 Acessórios</div>
+      ${temPrat ? `<div class="tab ${compSubTab==='prat'?'on':''}" onclick="compSubTab='prat';renderEditorComposicoes()">📚 Prateleiras</div>`:""}
     </div>
     ${renderCompTabela(compTabAtual, compSubTab, comp[compSubTab])}
-    <p class="small">Variáveis: <b>L</b>=largura, <b>A</b>=altura, <b>P</b>=profundidade, <b>N</b>=nº gavetas/portas.</p>
+    <p class="small">
+      Variáveis: <b>L</b>=largura · <b>A</b>=altura · <b>P</b>=profundidade · <b>N</b>=nº gavetas/portas.<br>
+      Vidro: <b>Porta</b> (divide pelo N) · <b>L×A</b> · <b>L×P</b> · <b>A×P</b>.
+    </p>
     <button class="btn no-print" onclick="addItemComp()">+ Adicionar item</button>
   `;
 }
 
 function renderCompTabela(tipoVao, cat, itens){
+  if(cat==="prat"){
+    const p = state.composicoes[tipoVao].prateleiras;
+    return `
+      <div class="subcard">
+        <div class="row" style="margin-bottom:10px">
+          <label style="margin:0"><input type="checkbox" ${p.ativo?"checked":""} onchange="setPrat('${tipoVao}','ativo',this.checked)" style="margin-right:6px"> Ativar prateleiras neste tipo de vão</label>
+        </div>
+        <div class="grid g4">
+          <div><label>Qtd padrão</label><input type="number" min="1" value="${p.qtd||2}" onchange="setPrat('${tipoVao}','qtd',+this.value)"></div>
+          <div><label>Vidro prateleira</label>
+            <select onchange="setPrat('${tipoVao}','vidro.matId',this.value)">
+              ${state.materiais.vidros.map(m=>`<option value="${m.id}" ${p.vidro?.matId===m.id?"selected":""}>${escapeHtml(m.nome)}</option>`).join("")}
+            </select>
+          </div>
+          <div><label>Desc. largura (mm)</label><input type="number" value="${p.vidro?.descL||0}" onchange="setPrat('${tipoVao}','vidro.descL',+this.value)"></div>
+          <div><label>Desc. profundidade (mm)</label><input type="number" value="${p.vidro?.descA||0}" onchange="setPrat('${tipoVao}','vidro.descA',+this.value)"></div>
+          <div><label>Perfil sustentação</label>
+            <select onchange="setPrat('${tipoVao}','perfil.matId',this.value)">
+              ${state.materiais.perfis.map(m=>`<option value="${m.id}" ${p.perfil?.matId===m.id?"selected":""}>${escapeHtml(m.nome)}</option>`).join("")}
+            </select>
+          </div>
+          <div><label>Orientação perfil</label>
+            <select onchange="setPrat('${tipoVao}','perfil.orientacao',this.value)">
+              <option value="L" ${p.perfil?.orientacao==='L'?'selected':''}>Largura</option>
+              <option value="A" ${p.perfil?.orientacao==='A'?'selected':''}>Altura</option>
+              <option value="P" ${p.perfil?.orientacao==='P'?'selected':''}>Profundidade</option>
+            </select>
+          </div>
+          <div><label>Desc. perfil (mm)</label><input type="number" value="${p.perfil?.desc||0}" onchange="setPrat('${tipoVao}','perfil.desc',+this.value)"></div>
+          <div><label>Suporte (acessório)</label>
+            <select onchange="setPrat('${tipoVao}','acess.matId',this.value)">
+              ${state.materiais.acess.map(m=>`<option value="${m.id}" ${p.acess?.matId===m.id?"selected":""}>${escapeHtml(m.nome)}</option>`).join("")}
+            </select>
+          </div>
+          <div><label>Suportes por prateleira</label><input type="number" min="0" value="${p.acess?.porPrateleira||2}" onchange="setPrat('${tipoVao}','acess.porPrateleira',+this.value)"></div>
+        </div>
+        <p class="small" style="margin-top:8px">💡 O vidro da prateleira usa <b>largura × profundidade</b> do vão, com os descontos acima. Cada prateleira consome 1 perfil + N suportes.</p>
+      </div>`;
+  }
+
   if(cat==="acess"){
     return `<table><thead><tr><th>Material</th><th>Qtd (fórmula)</th><th></th></tr></thead><tbody>
       ${itens.map((it,i)=>`
@@ -1333,7 +1423,7 @@ function renderCompTabela(tipoVao, cat, itens){
     </tbody></table>`;
   }
   if(cat==="vidros"){
-    return `<table><thead><tr><th>Vidro</th><th>Qtd</th><th>Orientação</th><th>Desc. L</th><th>Desc. A</th><th></th></tr></thead><tbody>
+    return `<table><thead><tr><th>Vidro</th><th>Qtd</th><th>Orientação</th><th>Desc. L</th><th>Desc. A/P</th><th></th></tr></thead><tbody>
       ${itens.map((it,i)=>`
         <tr>
           <td><select onchange="setCompItem('${tipoVao}','${cat}',${i},'matId',this.value)">
@@ -1342,7 +1432,9 @@ function renderCompTabela(tipoVao, cat, itens){
           <td><input value="${escapeHtml(it.qtdFormula||'')}" onchange="setCompItem('${tipoVao}','${cat}',${i},'qtdFormula',this.value)"></td>
           <td><select onchange="setCompItem('${tipoVao}','${cat}',${i},'orientacao',this.value)">
             <option value="porta" ${it.orientacao==='porta'?'selected':''}>Porta (divide)</option>
-            <option value="LA" ${it.orientacao==='LA'?'selected':''}>L × A</option>
+            <option value="LA" ${it.orientacao==='LA'?'selected':''}>Largura × Altura</option>
+            <option value="LP" ${it.orientacao==='LP'?'selected':''}>Largura × Profundidade</option>
+            <option value="AP" ${it.orientacao==='AP'?'selected':''}>Altura × Profundidade</option>
           </select></td>
           <td><input type="number" value="${it.descL||0}" onchange="setCompItem('${tipoVao}','${cat}',${i},'descL',+this.value)"></td>
           <td><input type="number" value="${it.descA||0}" onchange="setCompItem('${tipoVao}','${cat}',${i},'descA',+this.value)"></td>
@@ -1377,11 +1469,21 @@ function setCompItem(tipoVao, cat, idx, key, val){ state.composicoes[tipoVao][ca
 function delCompItem(tipoVao, cat, idx){ state.composicoes[tipoVao][cat].splice(idx,1); save(); render(); }
 function addItemComp(){
   const t = compTabAtual, cat = compSubTab;
+  if(cat === "prat"){ toast("Prateleiras já configuradas", false); return; }
   const def = { matId: state.materiais[cat][0]?.id || "", qtdFormula:"1" };
   if(cat==="perfis"){ def.orientacao="L"; def.desc=0; }
   if(cat==="vidros"){ def.orientacao="porta"; def.descL=3; def.descA=6; }
   if(cat==="acm"){ def.orientacao="LA"; def.descL=0; def.descA=0; def.rotulo=""; }
   state.composicoes[t][cat].push(def); save(); render();
+}
+
+// Definir valores aninhados tipo "vidro.matId"
+function setPrat(tipoVao, path, val){
+  const p = state.composicoes[tipoVao].prateleiras;
+  const parts = path.split(".");
+  if(parts.length === 1){ p[parts[0]] = val; }
+  else if(parts.length === 2){ if(!p[parts[0]]) p[parts[0]] = {}; p[parts[0]][parts[1]] = val; }
+  save(); render();
 }
 
 /* =====================================================================
@@ -1460,8 +1562,9 @@ function renderResultado(g){
           <thead><tr><th>Módulo</th><th>Tipo</th><th style="text-align:right">Perfis</th><th style="text-align:right">Vidros</th><th style="text-align:right">ACM</th><th style="text-align:right">Acess.</th><th style="text-align:right">Total</th></tr></thead>
           <tbody>${(a.vaos||[]).map(v=>{
             const c = v._custo || {perfis:0,vidros:0,acm:0,acess:0,total:0};
+            const prat = v.temPrateleiras ? ` <span class="pill ok">📚${v.qtdPrateleiras||0}</span>` : "";
             return `<tr>
-              <td>${escapeHtml(v.descricao||"-")} <span class="small">(${v.largura}mm)</span></td>
+              <td>${escapeHtml(v.descricao||"-")} <span class="small">(${v.largura}mm)</span>${prat}</td>
               <td>${TIPOS_VAO[v.tipo].nome}</td>
               <td style="text-align:right">${fmt(c.perfis)}</td>
               <td style="text-align:right">${fmt(c.vidros)}</td>
@@ -1547,7 +1650,7 @@ function renderProposta(g){
         <thead><tr><th>Ambiente</th><th>Módulo</th><th style="text-align:right">Larg.</th><th>Tipo</th><th style="text-align:right">Valor</th></tr></thead>
         <tbody>${state.ambientes.map(a=>(a.vaos||[]).map(v=>`<tr>
             <td>${escapeHtml(a.nome)}</td>
-            <td>${escapeHtml(v.descricao||"-")}</td>
+            <td>${escapeHtml(v.descricao||"-")}${v.temPrateleiras?` 📚${v.qtdPrateleiras||0}`:""}</td>
             <td style="text-align:right">${v.largura}mm</td>
             <td>${TIPOS_VAO[v.tipo].nome}</td>
             <td style="text-align:right">${fmt(v._custo?.total||0)}</td>
@@ -1626,8 +1729,16 @@ function salvarOrcamento(){
   saveHist(); renderHistorico(); toast("Orçamento salvo localmente!");
 }
 function novoOrcamento(){
-  if(!confirm("Limpar o orçamento atual?")) return;
-  state = novoEstado(); save(); render(); toast("Novo orçamento");
+  if(!confirm("Limpar o orçamento atual? Suas composições e materiais personalizados serão mantidos.")) return;
+  // Preserva composições, materiais e params
+  const composicoes = JSON.parse(JSON.stringify(state.composicoes));
+  const materiais   = JSON.parse(JSON.stringify(state.materiais));
+  const params      = JSON.parse(JSON.stringify(state.params));
+  state = novoEstado();
+  state.composicoes = composicoes;
+  state.materiais   = materiais;
+  state.params      = params;
+  save(); render(); toast("Novo orçamento (padrões preservados)");
 }
 function carregarHist(i){
   if(!confirm("Carregar?")) return;
@@ -1672,6 +1783,7 @@ function importJSON(e){
 }
 function resetAll(){
   if(!confirm("Zerar TUDO? (inclui histórico local)")) return;
+  localStorage.removeItem("orcPro_v3");
   localStorage.removeItem("orcPro_v2");
   localStorage.removeItem("orcPro_hist");
   state = novoEstado(); hist = [];
@@ -1699,8 +1811,8 @@ if(!state.ambientes.length){
   state.ambientes.push({
     id:uid(), nome:"Cozinha Exemplo", largura:5000, altura:800, profundidade:500,
     vaos:[
-      { id:uid(), tipo:"gaveta", descricao:"Gaveteiro 3G", largura:500, gavetasPortas:3 },
-      { id:uid(), tipo:"porta_dupla", descricao:"Armário Aéreo", largura:800, gavetasPortas:2 }
+      { id:uid(), tipo:"gaveta", descricao:"Gaveteiro 3G", largura:500, gavetasPortas:3, temPrateleiras:false, qtdPrateleiras:0 },
+      { id:uid(), tipo:"porta_dupla", descricao:"Armário Aéreo", largura:800, gavetasPortas:2, temPrateleiras:false, qtdPrateleiras:0 }
     ]
   });
   state.orcamento.numero = "ORC-001";
@@ -1709,6 +1821,7 @@ if(!state.ambientes.length){
 save();
 render();
 atualizarStatusNuvem("off");
+carregarTemplateInicial();
 </script>
 </body>
 </html>
