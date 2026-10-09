@@ -113,7 +113,12 @@
   @media print{
     /* Zera tudo */
     html, body{background:#fff !important;color:#000 !important;font-size:11px !important}
-    main{padding:0 !important;max-width:100% !important;margin:0 !important}
+       main{
+      padding:0 !important;
+      max-width:100% !important;
+      margin:0 !important;
+      display:block !important;   /* ← importante: garante fluxo único */
+    }
 
     /* Esconde TUDO que é da interface do app */
     header.top,
@@ -148,17 +153,22 @@
     }
 
     /* ===== CABEÇALHO DE IMPRESSÃO ===== */
+        /* ===== CABEÇALHO DE IMPRESSÃO ===== */
     .print-header{
       display:flex !important;
       visibility:visible !important;
       align-items:center;
       flex-wrap:nowrap;
       gap:12px;
-      margin:0 0 12px 0;
+      margin:0 0 8px 0;
       padding:0 0 8px 0;
       border-bottom:2px solid #222;
       height:auto !important;
       overflow:visible !important;
+      page-break-after:avoid !important;
+      break-after:avoid !important;
+      page-break-inside:avoid !important;
+      break-inside:avoid !important;
     }
     .print-header img{
       height:52px;max-height:52px;width:auto;
@@ -176,16 +186,23 @@
     }
 
     /* ===== CARDS ===== */
-    .card{
+      .card{
       background:#fff !important;
       box-shadow:none !important;
       border:1px solid #ccc !important;
       color:#000 !important;
-      page-break-inside:avoid;
+      page-break-inside:auto !important;   /* ← mudou de avoid para auto */
+      break-inside:auto !important;
       margin-bottom:10px !important;
       border-radius:6px;
       padding:12px !important;
       position:static !important;
+    }
+        /* Força o cabeçalho e o primeiro card da proposta a ficarem juntos */
+    .print-header + section,
+    .print-header + section > .card:first-child {
+      page-break-before:avoid !important;
+      break-before:avoid !important;
     }
     .card h2{font-size:11px;margin:0 0 8px 0;color:#000 !important}
     .card h3{font-size:10.5px;margin:10px 0 6px 0;color:#000 !important}
