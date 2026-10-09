@@ -588,6 +588,21 @@ function saveHist(){
    ===================================================================== */
 function uid(){ return Math.random().toString(36).slice(2,9); }
 function fmt(v){ return (v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"}); }
+  function fmtData(d){
+  if(!d) return "—";
+  try{
+    if(d instanceof Date) return d.toLocaleDateString("pt-BR");
+    const s = String(d).trim();
+    if(!s) return "—";
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if(m) return `${m[3]}/${m[2]}/${m[1]}`;
+    const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+    if(isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+    const dt = new Date(s);
+    if(!isNaN(dt.getTime())) return dt.toLocaleDateString("pt-BR");
+    return s;
+  }catch(e){ return "—"; }
+}
 function fmtN(v,d=2){ return (v||0).toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d}); }
 function toast(msg, err){
   const t = document.getElementById("toast");
@@ -931,7 +946,7 @@ function cortarChapas(pecas, chapa){
 /* =====================================================================
    GOOGLE SHEETS
    ===================================================================== */
-const SHEETS_API = "https://script.google.com/macros/s/AKfycbxBHYZadQ4Cb8yztesVWB7A8GKSX8FzAoe2W2Ox-pdxx7yY2KNTJ3NbYT0FRK99FpOLkg/exec";
+const SHEETS_API = "https://script.google.com/macros/s/AKfycbyOgoKuorYAf9tD50eUlNA3qLAFCCQTR97vAJTikdWEat6KH___horwZ7SKaoO-nUKC8g/exec";
 
 let _sheetsTimer = null;
 function agendarSyncSheets(){
@@ -1362,7 +1377,7 @@ async function atualizarListaOrcamentos(){
           <tr style="${o.ativo ? 'background:#0e2240' : ''}">
             <td><b>${escapeHtml(o.numero)}</b>${o.ativo ? ' <span class="pill ok">ABERTO</span>' : ''}</td>
             <td>${escapeHtml(o.cliente)}</td>
-            <td>${o.data || "-"}</td>
+            <td>${fmtData(o.data)}</td>
             <td class="small">${o.updated_at ? new Date(o.updated_at).toLocaleString("pt-BR") : "-"}</td>
             <td><span class="pill ${o.fonte==="nuvem"?"acc":"warn"}">${o.fonte==="nuvem"?"☁️ Nuvem":"💾 Local"}</span></td>
             <td style="text-align:right">
@@ -1382,7 +1397,7 @@ async function atualizarListaOrcamentos(){
       <div class="grid g4">
         <div class="kpi"><div class="l">Nº</div><div class="v">${escapeHtml(o.numero||"—")}</div></div>
         <div class="kpi"><div class="l">Cliente</div><div class="v">${escapeHtml(o.cliente||"—")}</div></div>
-        <div class="kpi"><div class="l">Data</div><div class="v">${o.data||"—"}</div></div>
+        <div class="kpi"><div class="l">Data</div><div class="v">${fmtData(o.data)}</div></div>
         <div class="kpi"><div class="l">Ambientes</div><div class="v">${(state.ambientes||[]).length}</div></div>
       </div>
       <div class="row" style="margin-top:12px">
@@ -1542,7 +1557,7 @@ function render(){
   const phD = document.getElementById("phData");
   const phC = document.getElementById("phCliente");
   if(phN) phN.textContent = state.orcamento.numero || "—";
-  if(phD) phD.textContent = state.orcamento.data || "—";
+  if(phD) phD.textContent = fmtData(state.orcamento.data);
   if(phC) phC.textContent = state.orcamento.cliente || "—";
 
   document.getElementById("cv_w").value = state.params.chapaVidro.w;
