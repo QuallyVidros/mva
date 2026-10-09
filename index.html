@@ -104,20 +104,42 @@
   .print-header .ph-txt .ph-sub{font-size:12px;color:#555}
   .print-header .ph-info{text-align:right;font-size:12px;color:#333;line-height:1.4}
 
+   /* ===== CONTROLE DE IMPRESSÃO ===== */
+  body.printing-proposta #tab-proposta,
+  body.printing-compra   #tab-compra,
+  body.printing-res      #tab-res { display: block !important; }
+
   @media print{
     body{background:#fff;color:#000;font-size:11px}
-    header.top,.no-print,.tabs,.modal-bg,.toast,.tabs-inner{display:none !important}
+    header.top, .no-print, .tabs, .modal-bg, .toast, .tabs-inner { display:none !important }
     main{padding:0;max-width:100%}
-    .print-header{display:flex !important}
-    .card{background:#fff;box-shadow:none;border:1px solid #ccc;color:#000;page-break-inside:avoid;margin-bottom:8px;border-radius:6px}
+
+    /* Por padrão, esconde TODAS as sections */
+    main > section { display:none !important }
+
+    /* Mostra apenas o alvo */
+    body.printing-proposta main > #tab-proposta,
+    body.printing-compra   main > #tab-compra,
+    body.printing-res      main > #tab-res,
+    body.printing-orc      main > #tab-orc { display:block !important }
+
+    /* Cabeçalho de impressão sempre visível */
+    .print-header{display:flex !important; align-items:center; gap:14px;
+      margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #222}
+    .print-header img{height:60px;width:auto;background:#fff;object-fit:contain}
+
+    .card{background:#fff;box-shadow:none;border:1px solid #ccc;color:#000;
+      page-break-inside:avoid;margin-bottom:8px;border-radius:6px;padding:10px}
     .card h2,.card h3{color:#000}
+
     th{background:#eee;color:#000}
     td,th{border-color:#999}
     input,select,textarea{background:#fff;color:#000;border:none;padding:0}
     .pill{background:#eee;color:#333;border:1px solid #ccc}
     .tot{color:#000}
     .kpi{background:#f8f8f8;border-left-color:#333}
-    #tab-lista{display:none !important}
+    .bar{background:#eee}
+    .bar > div{background:#333}
   }
 </style>
 </head>
@@ -137,24 +159,25 @@
   <button class="btn sec sm" onclick="exportJSON()">💾 Exportar</button>
   <button class="btn sec sm" onclick="document.getElementById('impFile').click()">📂 Importar</button>
   <input id="impFile" type="file" accept=".json" class="hidden" onchange="importJSON(event)">
-  <button class="btn warn sm" onclick="window.print()">🖨️ Imprimir</button>
+  <button class="btn warn sm" onclick="imprimirAuto()">🖨️ Imprimir</button>
   <button class="btn err sm" onclick="resetAll()">🗑️ Zerar</button>
 </header>
 
 <main>
   <!-- CABEÇALHO PARA IMPRESSÃO -->
-  <div class="print-header">
-    <img src="logo.png" alt="OrçaProQually" onerror="this.style.display='none'">
-    <div class="ph-txt">
-      <h1>OrçaProQually · Móveis Planejados</h1>
-      <div class="ph-sub">Vidro · Alumínio · ACM — Projeto sob medida</div>
-    </div>
-    <div class="ph-info">
-      <div><b>Orçamento:</b> <span id="phNumero">—</span></div>
-      <div><b>Data:</b> <span id="phData">—</span></div>
-      <div><b>Cliente:</b> <span id="phCliente">—</span></div>
-    </div>
+ <div class="print-header">
+  <img src="logo.png" alt="OrçaProQually"
+       onerror="this.style.display='none';this.nextElementSibling.style.marginLeft='0'">
+  <div class="ph-txt">
+    <h1>OrçaProQually · Móveis Planejados</h1>
+    <div class="ph-sub">Vidro · Alumínio · ACM — Projeto sob medida</div>
   </div>
+  <div class="ph-info">
+    <div><b>Orçamento:</b> <span id="phNumero">—</span></div>
+    <div><b>Data:</b> <span id="phData">—</span></div>
+    <div><b>Cliente:</b> <span id="phCliente">—</span></div>
+  </div>
+</div>
 
   <div class="tabs no-print">
     <div class="tab on" data-tab="orc">📐 Orçamento</div>
@@ -281,7 +304,7 @@
     <div class="card">
       <h2>Proposta Comercial</h2>
       <div id="propostaComercial"></div>
-      <button class="btn no-print" style="margin-top:10px" onclick="window.print()">🖨️ Imprimir Proposta</button>
+      <button class="btn no-print" style="margin-top:10px" onclick="imprimirProposta()">🖨️ Imprimir Proposta</button>
     </div>
   </section>
 
@@ -291,6 +314,7 @@
       <h2>Lista de Compra / Cotação</h2>
       <div id="listaCompra"></div>
       <button class="btn sec no-print" style="margin-top:10px" onclick="exportCSV()">⬇️ Exportar CSV</button>
+      <button class="btn warn no-print" style="margin-top:10px;margin-left:8px" onclick="imprimirListaCompra()">🖨️ Imprimir Lista</button>
     </div>
   </section>
 
@@ -619,6 +643,45 @@ function toast(msg, err){
   const cls = err ? "toast show err" : (err === false ? "toast show warn" : "toast show");
   t.textContent = msg; t.className = cls;
   setTimeout(()=>t.className="toast", 2400);
+}
+  /* =====================================================================
+   IMPRESSÃO CONTROLADA
+   ===================================================================== */
+function imprimirProposta(){
+  document.body.classList.remove("printing-compra","printing-res","printing-orc");
+  document.body.classList.add("printing-proposta");
+  window.print();
+  setTimeout(()=>document.body.classList.remove("printing-proposta"), 500);
+}
+
+function imprimirListaCompra(){
+  document.body.classList.remove("printing-proposta","printing-res","printing-orc");
+  document.body.classList.add("printing-compra");
+  window.print();
+  setTimeout(()=>document.body.classList.remove("printing-compra"), 500);
+}
+
+function imprimirResultado(){
+  document.body.classList.remove("printing-proposta","printing-compra","printing-orc");
+  document.body.classList.add("printing-res");
+  window.print();
+  setTimeout(()=>document.body.classList.remove("printing-res"), 500);
+}
+
+function imprimirOrcamento(){
+  document.body.classList.remove("printing-proposta","printing-compra","printing-res");
+  document.body.classList.add("printing-orc");
+  window.print();
+  setTimeout(()=>document.body.classList.remove("printing-orc"), 500);
+}
+
+function imprimirAuto(){
+  const ativo = document.querySelector('.tabs .tab.on');
+  const aba = ativo ? ativo.dataset.tab : "proposta";
+  if(aba === "compra") return imprimirListaCompra();
+  if(aba === "res")    return imprimirResultado();
+  if(aba === "orc")    return imprimirOrcamento();
+  return imprimirProposta();
 }
 
 function escapeHtml(s){ return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
