@@ -388,7 +388,7 @@
 
 <script>
 /* =====================================================================
-   OrçaProQually v3.4 — Impressão Individual + Desconto na Proposta
+   OrçaProQually v3.6 — Cálculo de Rateio e Arredondamento Correto
    ===================================================================== */
 const CORES_PERFIL = ["Bronze","Preto","Branco","Champanhe","Fosco","A definir"];
 const CORES_VIDRO  = ["Incolor","Preto","Branco","Champanhe","Cinza","Bege","A definir"];
@@ -498,8 +498,8 @@ function normalizeState(s){
   return { orcamento: orc, ambientes: Array.isArray(s.ambientes) ? s.ambientes : [], materiais: { ...base.materiais, ...(s.materiais||{}) }, composicoes: { ...base.composicoes, ...(s.composicoes||{}) }, estrutura: { ...base.estrutura, ...(s.estrutura||{}) }, params: { ...base.params, ...(s.params||{}) } };
 }
 
-function save(){ try{ state = normalizeState(state); localStorage.setItem("orcProQually_v11", JSON.stringify({ v:11, savedAt:new Date().toISOString(), state })); if(typeof agendarSyncSheets === "function") agendarSyncSheets(); }catch(e){} }
-function load(){ try{ const raw = localStorage.getItem("orcProQually_v11") || localStorage.getItem("orcProQually_v10") || localStorage.getItem("orcProQually_v9"); if(raw){ state = normalizeState(JSON.parse(raw).state || JSON.parse(raw)); } else state = novoEstado(); const h = localStorage.getItem("orcProQually_hist"); hist = h ? (JSON.parse(h)||[]) : []; }catch(e){ state = novoEstado(); hist = []; } }
+function save(){ try{ state = normalizeState(state); localStorage.setItem("orcProQually_v13", JSON.stringify({ v:13, savedAt:new Date().toISOString(), state })); if(typeof agendarSyncSheets === "function") agendarSyncSheets(); }catch(e){} }
+function load(){ try{ const raw = localStorage.getItem("orcProQually_v13") || localStorage.getItem("orcProQually_v12") || localStorage.getItem("orcProQually_v11"); if(raw){ state = normalizeState(JSON.parse(raw).state || JSON.parse(raw)); } else state = novoEstado(); const h = localStorage.getItem("orcProQually_hist"); hist = h ? (JSON.parse(h)||[]) : []; }catch(e){ state = novoEstado(); hist = []; } }
 function saveHist(){ try{ localStorage.setItem("orcProQually_hist", JSON.stringify(hist)); }catch(e){} }
 
 /* =====================================================================
@@ -912,6 +912,15 @@ function gerarHTMLProposta(g, isCliente){
   const o = state.orcamento, dataVenc = new Date(new Date(o.data||Date.now()).getTime() + (o.validade||15)*86400000);
   const fatorVenda = (1 + (state.params.bdi/100)) * (1 + (state.params.imposto/100));
   
+  // Cálculo do Rateio para a Proposta Cliente
+  let custoBaseTotal = 0;
+  state.ambientes.forEach(a => {
+    custoBaseTotal += (g.porAmbiente[a.id]?.estrutura || 0);
+    (a.vaos||[]).forEach(v => custoBaseTotal += (v._custo?.total || 0));
+  });
+  const totalFreteInst = (state.params.frete || 0) + (state.params.instalacao || 0);
+  const taxaRateio = custoBaseTotal > 0 ? (totalFreteInst / custoBaseTotal) : 0;
+  
   return `<div style="border:1px solid var(--line);border-radius:10px;padding:20px;background:#0d1728">
       <div class="flex-between" style="margin-bottom:14px"><div><h2 style="margin:0;color:var(--acc2)">PROPOSTA COMERCIAL</h2><p class="small">Nº ${escapeHtml(o.numero||"-")} · ${fmtData(o.data)}</p></div><div style="text-align:right"><p class="small">Validade: ${o.validade||15} dias (até ${dataVenc.toLocaleDateString("pt-BR")})</p></div></div>
       <table style="margin-bottom:16px"><tr><td><b>Cliente:</b></td><td>${escapeHtml(o.cliente||"-")}</td><td><b>Telefone:</b></td><td>${escapeHtml(o.telefone||"-")}</td></tr><tr><td><b>Vendedor:</b></td><td>${escapeHtml(o.vendedor||"-")}</td><td><b>Obs.:</b></td><td>${escapeHtml(o.obs||"-")}</td></tr></table>
@@ -923,13 +932,21 @@ function gerarHTMLProposta(g, isCliente){
             let rows = '';
             const totEst = g.porAmbiente[a.id]?.estrutura || 0;
             if(totEst > 0) {
-              const valEst = isCliente ? (totEst * fatorVenda) : totEst;
-              rows += `<tr style="background:rgba(255,255,255,0.03)"><td>${escapeHtml(a.nome)}</td><td><b>Estrutura Base / Fechamentos</b></td><td style="text-align:right">${a.largura}mm</td><td>Sustentação</td><td class="small">${corPill(a.corPerfil,"🔩 ")} ${corPill(a.corVidro,"🪟 ")}</td><td style="text-align:right">${fmt(valEst)}</td></tr>`;
+              // Cálculo da estrutura com rateio
+              const valEstBase = totEst * fatorVenda;
+              const valEstRateio = totEst * taxaRateio * fatorVenda;
+              const valEstFinal = isCliente ? (valEstBase + valEstRateio) : totEst;
+              
+              rows += `<tr style="background:rgba(255,255,255,0.03)"><td>${escapeHtml(a.nome)}</td><td><b>Estrutura Base / Fechamentos</b></td><td style="text-align:right">${a.largura}mm</td><td>Sustentação</td><td class="small">${corPill(a.corPerfil,"🔩 ")} ${corPill(a.corVidro,"🪟 ")}</td><td style="text-align:right">${fmt(valEstFinal)}</td></tr>`;
             }
             (a.vaos||[]).forEach(v => {
               const totVao = v._custo?.total || 0;
-              const valVao = isCliente ? (totVao * fatorVenda) : totVao;
-              rows += `<tr><td>${escapeHtml(a.nome)}</td><td>${escapeHtml(v.descricao||"-")}${v.temPrateleiras?` 📚${v.qtdPrateleiras||0}`:""}</td><td style="text-align:right">${v.largura}mm</td><td>${TIPOS_VAO[v.tipo].nome}</td><td class="small">${corPill(v.corPerfil,"🔩 ")} ${corPill(v.corVidro,"🪟 ")}</td><td style="text-align:right">${fmt(valVao)}</td></tr>`;
+              // Cálculo do vão com rateio
+              const valVaoBase = totVao * fatorVenda;
+              const valVaoRateio = totVao * taxaRateio * fatorVenda;
+              const valVaoFinal = isCliente ? (valVaoBase + valVaoRateio) : totVao;
+              
+              rows += `<tr><td>${escapeHtml(a.nome)}</td><td>${escapeHtml(v.descricao||"-")}${v.temPrateleiras?` 📚${v.qtdPrateleiras||0}`:""}</td><td style="text-align:right">${v.largura}mm</td><td>${TIPOS_VAO[v.tipo].nome}</td><td class="small">${corPill(v.corPerfil,"🔩 ")} ${corPill(v.corVidro,"🪟 ")}</td><td style="text-align:right">${fmt(valVaoFinal)}</td></tr>`;
             });
             return rows;
           }).join("")}
@@ -995,7 +1012,7 @@ function renderHistorico(){ const box = document.getElementById("listaHist"); bo
    ===================================================================== */
 function exportJSON(){ const blob = new Blob([JSON.stringify({state, hist}, null, 2)], {type:"application/json"}); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `orcamento-${state.orcamento.numero||"orc"}.json`; a.click(); }
 function importJSON(e){ const f = e.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = () => { try{ const d = JSON.parse(r.result); if(d.state){ state = normalizeState(d.state); if(d.hist){ hist = d.hist; saveHist(); } } else state = normalizeState(d); state.orcamento.salvoNaNuvem = true; save(); render(); toast("Importado!"); }catch(err){ toast("Arquivo inválido", true); } }; r.readAsText(f); }
-function resetAll(){ if(!confirm("Zerar TUDO?")) return; ["orcProQually_v11","orcProQually_v10","orcProQually_v9","orcProQually_v8","orcProQually_v7","orcProQually_v6","orcProQually_v5","orcProQually_hist","orcPro_v4","orcPro_v3","orcPro_v2","orcPro_hist"].forEach(k => localStorage.removeItem(k)); state = novoEstado(); hist = []; render(); toast("Zerado"); }
+function resetAll(){ if(!confirm("Zerar TUDO?")) return; ["orcProQually_v13","orcProQually_v12","orcProQually_v11","orcProQually_v10","orcProQually_v9","orcProQually_v8","orcProQually_v7","orcProQually_v6","orcProQually_v5","orcProQually_hist","orcPro_v4","orcPro_v3","orcPro_v2","orcPro_hist"].forEach(k => localStorage.removeItem(k)); state = novoEstado(); hist = []; render(); toast("Zerado"); }
 
 /* =====================================================================
    TABS
