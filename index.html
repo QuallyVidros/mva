@@ -113,24 +113,25 @@
     html, body{background:#fff !important;color:#000 !important;font-size:11px !important}
     main{padding:0 !important;max-width:100% !important;margin:0 !important;display:block !important;}
 
-    /* Esconde TUDO por padrão */
     header.top, .tabs, .no-print, .modal-bg, .toast, .tabs-inner, #nuvemStatus, #templateStatus { display:none !important; }
     main > section { display:none !important; }
     .card { display:none !important; }
 
-    /* 1. IMPRESSÃO POR SEÇÃO DO RESULTADO */
-    body.printing-res main > #tab-res { display:block !important; }
-    body.printing-res main > #tab-res > .card { display:block !important; }
-    body.printing-res main > #tab-res > .card.hide-print { display:none !important; } /* Esconde os KPIs financeiros */
-    body.printing-sec main > #tab-res > .card { display:none !important; }
+    /* 1. IMPRESSÃO POR SEÇÃO DO RESULTADO (individual) */
+    body.printing-sec main > #tab-res { display:block !important; }
     body.printing-sec main > #tab-res > .card.print-target { display:block !important; }
 
-    /* 2. IMPRESSÃO DA PROPOSTA (INTERNA OU CLIENTE) */
+    /* 2. IMPRESSÃO COMPLETA DO RESULTADO (sem valores financeiros) */
+    body.printing-res main > #tab-res { display:block !important; }
+    body.printing-res main > #tab-res > .card.hide-print { display:none !important; }
+    body.printing-res main > #tab-res > .card.print-target { display:block !important; }
+
+    /* 3. IMPRESSÃO DA PROPOSTA (INTERNA OU CLIENTE) */
     body.printing-proposta-interna main > #tab-proposta, body.printing-proposta-cliente main > #tab-proposta { display:block !important; }
     body.printing-proposta-interna main > #tab-proposta > .card, body.printing-proposta-cliente main > #tab-proposta > .card { display:block !important; }
     body.printing-proposta-interna #tab-proposta .client-box, body.printing-proposta-cliente #tab-proposta .internal-box { display:none !important; }
 
-    /* 3. IMPRESSÃO DA LISTA DE COMPRA */
+    /* 4. IMPRESSÃO DA LISTA DE COMPRA */
     body.printing-compra main > #tab-compra { display:block !important; }
     body.printing-compra main > #tab-compra > .card { display:block !important; }
 
@@ -302,7 +303,6 @@
         <div><label>BDI / Margem (%)</label><input type="number" id="bdi" value="30"></div>
         <div><label>Frete (R$)</label><input type="number" id="frete" value="0"></div>
         <div><label>Instalação (R$)</label><input type="number" id="instal" value="0"></div>
-        <div><label>Desconto (R$)</label><input type="number" id="desc" value="0"></div>
         <div><label>Impostos (%)</label><input type="number" id="imp" value="0"></div>
       </div>
       <button class="btn" style="margin-top:10px" onclick="salvarParams()">Salvar Parâmetros</button>
@@ -311,6 +311,12 @@
 
   <!-- RESULTADO -->
   <section id="tab-res" class="hidden">
+    <div class="card no-print" style="background:var(--panel2)">
+      <div class="flex-between">
+        <h2 style="margin:0">📊 Resultado e Cortes</h2>
+        <button class="btn ok" onclick="imprimirResultado()">🖨️ Imprimir Tudo (sem valores admin)</button>
+      </div>
+    </div>
     <div class="card hide-print"><h2>Resumo Executivo</h2><div id="kpis"></div></div>
     <div class="card hide-print"><h2>Custo por Ambiente / Módulo</h2><div id="resumoAmb"></div></div>
     
@@ -338,10 +344,16 @@
   <!-- PROPOSTA -->
   <section id="tab-proposta" class="hidden">
     <div class="card">
-      <h2>Visualização e Impressão</h2>
-      <div class="row no-print" style="margin-bottom:16px">
-        <button class="btn ok" onclick="imprimirPropostaCliente()">🖨️ Imprimir Proposta Cliente</button>
-        <button class="btn sec" onclick="imprimirPropostaInterna()">🖨️ Imprimir Proposta Interna (Custos)</button>
+      <h2>Emissão de Proposta</h2>
+      <div class="grid g2" style="margin-bottom:16px; align-items:center;">
+        <div>
+          <label style="color:var(--warn); font-size:12px;">Desconto Exclusivo deste Orçamento (R$)</label>
+          <input type="number" id="desc" value="0" onchange="setOrc('desconto',+this.value)" style="border-color:var(--warn)">
+        </div>
+        <div class="row" style="justify-content:flex-end;">
+          <button class="btn ok" onclick="imprimirPropostaCliente()">🖨️ Proposta Cliente</button>
+          <button class="btn sec" onclick="imprimirPropostaInterna()">🖨️ Proposta Interna (Custos)</button>
+        </div>
       </div>
 
       <div id="propostaComercial"></div>
@@ -376,7 +388,7 @@
 
 <script>
 /* =====================================================================
-   OrçaProQually v3.3 — Impressão Separada e Proposta Cliente
+   OrçaProQually v3.4 — Impressão Individual + Desconto na Proposta
    ===================================================================== */
 const CORES_PERFIL = ["Bronze","Preto","Branco","Champanhe","Fosco","A definir"];
 const CORES_VIDRO  = ["Incolor","Preto","Branco","Champanhe","Cinza","Bege","A definir"];
@@ -461,7 +473,7 @@ const MAT_DEFAULT = {
 };
 
 const PARAMS_DEFAULT = {
-  chapaVidro:{ w:1600, h:2200 }, chapaACM:{ w:1200, h:5000 }, barraPerfil: 6000, kerf: 3, bdi: 30, frete:0, instalacao:0, desconto:0, imposto:0
+  chapaVidro:{ w:1600, h:2200 }, chapaACM:{ w:1200, h:5000 }, barraPerfil: 6000, kerf: 3, bdi: 30, frete:0, instalacao:0, imposto:0
 };
 
 /* =====================================================================
@@ -473,7 +485,7 @@ function gerarIdLocal(){ return "LOCAL-" + Date.now() + "-" + Math.random().toSt
 
 function novoEstado(){
   return {
-    orcamento:{ id: gerarIdLocal(), salvoNaNuvem: false, numero:"", cliente:"", telefone:"", data:new Date().toISOString().slice(0,10), vendedor:"", validade:15, obs:"", status:"Rascunho" },
+    orcamento:{ id: gerarIdLocal(), salvoNaNuvem: false, numero:"", cliente:"", telefone:"", data:new Date().toISOString().slice(0,10), vendedor:"", validade:15, obs:"", status:"Rascunho", desconto: 0 },
     ambientes: [], materiais: JSON.parse(JSON.stringify(MAT_DEFAULT)), composicoes: JSON.parse(JSON.stringify(COMP_DEFAULT)), estrutura: JSON.parse(JSON.stringify(ESTRUTURA_DEFAULT)), params: JSON.parse(JSON.stringify(PARAMS_DEFAULT))
   };
 }
@@ -486,8 +498,8 @@ function normalizeState(s){
   return { orcamento: orc, ambientes: Array.isArray(s.ambientes) ? s.ambientes : [], materiais: { ...base.materiais, ...(s.materiais||{}) }, composicoes: { ...base.composicoes, ...(s.composicoes||{}) }, estrutura: { ...base.estrutura, ...(s.estrutura||{}) }, params: { ...base.params, ...(s.params||{}) } };
 }
 
-function save(){ try{ state = normalizeState(state); localStorage.setItem("orcProQually_v10", JSON.stringify({ v:10, savedAt:new Date().toISOString(), state })); if(typeof agendarSyncSheets === "function") agendarSyncSheets(); }catch(e){} }
-function load(){ try{ const raw = localStorage.getItem("orcProQually_v10") || localStorage.getItem("orcProQually_v9") || localStorage.getItem("orcProQually_v8"); if(raw){ state = normalizeState(JSON.parse(raw).state || JSON.parse(raw)); } else state = novoEstado(); const h = localStorage.getItem("orcProQually_hist"); hist = h ? (JSON.parse(h)||[]) : []; }catch(e){ state = novoEstado(); hist = []; } }
+function save(){ try{ state = normalizeState(state); localStorage.setItem("orcProQually_v11", JSON.stringify({ v:11, savedAt:new Date().toISOString(), state })); if(typeof agendarSyncSheets === "function") agendarSyncSheets(); }catch(e){} }
+function load(){ try{ const raw = localStorage.getItem("orcProQually_v11") || localStorage.getItem("orcProQually_v10") || localStorage.getItem("orcProQually_v9"); if(raw){ state = normalizeState(JSON.parse(raw).state || JSON.parse(raw)); } else state = novoEstado(); const h = localStorage.getItem("orcProQually_hist"); hist = h ? (JSON.parse(h)||[]) : []; }catch(e){ state = novoEstado(); hist = []; } }
 function saveHist(){ try{ localStorage.setItem("orcProQually_hist", JSON.stringify(hist)); }catch(e){} }
 
 /* =====================================================================
@@ -634,7 +646,7 @@ function calcularTudo(){
   const subtotal = custoDireto + bdiValor + impostoVal + p.frete + p.instalacao;
   
   g.custo = custo; g.custoDireto = custoDireto; g.bdiValor = bdiValor; g.impostoVal = impostoVal;
-  g.subtotal = subtotal; g.total = subtotal - p.desconto;
+  g.subtotal = subtotal; g.total = subtotal - (state.orcamento.desconto || 0);
   return g;
 }
 
@@ -695,7 +707,7 @@ async function salvarNoSheets(silencioso = false, forcado = false){
     if(!forcado && !state.orcamento.salvoNaNuvem) return;
     if(!state.orcamento.numero && !state.orcamento.cliente){ if(!silencioso) toast("⚠️ Preencha Nº e/ou Cliente", false); return; }
     atualizarStatusNuvem("sync"); if(!silencioso) toast("☁️ Salvando…");
-    const r = await sheetsRequest("salvar", { id: state.orcamento.id || null, cliente: state.orcamento.cliente, numero: state.orcamento.numero, data: state.orcamento.data, vendedor: state.orcamento.vendedor, ambientes: state.ambientes, materiais: state.materiais, composicoes: state.composicoes, estrutura: state.estrutura, params: state.params });
+    const r = await sheetsRequest("salvar", { id: state.orcamento.id || null, cliente: state.orcamento.cliente, numero: state.orcamento.numero, data: state.orcamento.data, vendedor: state.orcamento.vendedor, ambientes: state.ambientes, materiais: state.materiais, composicoes: state.composicoes, estrutura: state.estrutura, params: state.params, orcamento: state.orcamento });
     if(r.id) state.orcamento.id = r.id; state.orcamento.salvoNaNuvem = true;
     save(); atualizarStatusNuvem("ok"); if(!silencioso) toast("☁️ Salvo na nuvem!"); return r;
   }catch(e){ atualizarStatusNuvem("err"); if(!silencioso) toast("Erro: " + e.message, true); }
@@ -707,7 +719,7 @@ async function carregarDoSheets(id){
   try{
     const r = await sheetsRequest("carregar", { id }); if(!r.projeto) throw new Error("Projeto vazio"); const p = r.projeto;
     const compAtuais = JSON.parse(JSON.stringify(state.composicoes)), matAtuais = JSON.parse(JSON.stringify(state.materiais)), parAtuais = JSON.parse(JSON.stringify(state.params)), estAtuais = JSON.parse(JSON.stringify(state.estrutura));
-    state = normalizeState({ orcamento: { id: p.id, salvoNaNuvem: true, numero: p.numero, cliente: p.cliente, data: p.data, vendedor: p.vendedor, telefone: "", validade: 15, obs: "", status: "Aberto" }, ambientes: p.ambientes || [], materiais: p.materiais || matAtuais, composicoes: p.composicoes || compAtuais, estrutura: p.estrutura || estAtuais, params: p.params || parAtuais });
+    state = normalizeState({ orcamento: { id: p.id, salvoNaNuvem: true, numero: p.numero, cliente: p.cliente, data: p.data, vendedor: p.vendedor, telefone: "", validade: 15, obs: "", status: "Aberto", desconto: p.desconto || p.orcamento?.desconto || 0 }, ambientes: p.ambientes || [], materiais: p.materiais || matAtuais, composicoes: p.composicoes || compAtuais, estrutura: p.estrutura || estAtuais, params: p.params || parAtuais });
     state.orcamento.id = p.id; salvarOrcamentoLocal(); render(); toast("☁️ Carregado: " + (p.numero || p.id));
   }catch(e){ toast("Erro: " + e.message, true); }
 }
@@ -807,14 +819,15 @@ function limparVaos(aid){ if(!confirm("Remover TODOS os vãos deste ambiente?"))
    ===================================================================== */
 function render(){
   document.getElementById("orcNum").value = state.orcamento.numero || ""; document.getElementById("orcCli").value = state.orcamento.cliente || ""; document.getElementById("orcTel").value = state.orcamento.telefone || ""; document.getElementById("orcData").value = state.orcamento.data || ""; document.getElementById("orcVend").value = state.orcamento.vendedor || ""; document.getElementById("orcVal").value = state.orcamento.validade ?? 15; document.getElementById("orcObs").value = state.orcamento.obs || "";
+  document.getElementById("desc").value = state.orcamento.desconto || 0;
   const phN = document.getElementById("phNumero"), phD = document.getElementById("phData"), phC = document.getElementById("phCliente"); if(phN) phN.textContent = state.orcamento.numero || "—"; if(phD) phD.textContent = fmtData(state.orcamento.data); if(phC) phC.textContent = state.orcamento.cliente || "—";
-  document.getElementById("cv_w").value = state.params.chapaVidro.w; document.getElementById("cv_h").value = state.params.chapaVidro.h; document.getElementById("ca_w").value = state.params.chapaACM.w; document.getElementById("ca_h").value = state.params.chapaACM.h; document.getElementById("bp_l").value = state.params.barraPerfil; document.getElementById("kerf").value = state.params.kerf; document.getElementById("bdi").value = state.params.bdi; document.getElementById("frete").value= state.params.frete; document.getElementById("instal").value=state.params.instalacao; document.getElementById("desc").value = state.params.desconto; document.getElementById("imp").value = state.params.imposto;
+  document.getElementById("cv_w").value = state.params.chapaVidro.w; document.getElementById("cv_h").value = state.params.chapaVidro.h; document.getElementById("ca_w").value = state.params.chapaACM.w; document.getElementById("ca_h").value = state.params.chapaACM.h; document.getElementById("bp_l").value = state.params.barraPerfil; document.getElementById("kerf").value = state.params.kerf; document.getElementById("bdi").value = state.params.bdi; document.getElementById("frete").value= state.params.frete; document.getElementById("instal").value=state.params.instalacao; document.getElementById("imp").value = state.params.imposto;
   renderAmbientes(); renderEditorComposicoes(); renderMateriais();
   const g = calcularTudo(); renderResultado(g); renderProposta(g); renderCompra(g); renderHistorico(); atualizarStatusTemplate();
   document.querySelectorAll('input[type="file"]').forEach(el => { el.value = ""; });
 }
 
-function setOrc(k,v){ state.orcamento[k]=v; save(); }
+function setOrc(k,v){ state.orcamento[k]=v; save(); render(); }
 function setAmb(k,v,aid){ const a = state.ambientes.find(x=>x.id===aid); a[k]=v; save(); render(); }
 function addAmbiente(){ const nome = document.getElementById("nomeAmb").value.trim() || "Ambiente", L = +document.getElementById("ambL").value || 5000, A = +document.getElementById("ambA").value || 800, P = +document.getElementById("ambP").value || 500; state.ambientes.push({ id:uid(), nome, largura:L, altura:A, profundidade:P, vaos:[], visibilidade:"frente", corPerfil:"Branco", corVidro:"Incolor" }); document.getElementById("nomeAmb").value = ""; save(); render(); }
 function removeAmbiente(id){ if(!confirm("Remover este ambiente?")) return; state.ambientes = state.ambientes.filter(a=>a.id!==id); save(); render(); }
@@ -869,13 +882,13 @@ function renderMateriais(){ const box = document.getElementById("editorMat"), ar
 function setMat(i,k,v){ state.materiais[matCatAtual][i][k]=v; save(); render(); }
 function delMat(i){ if(!confirm("Remover?")) return; state.materiais[matCatAtual].splice(i,1); save(); render(); }
 function addMat(){ const prefix = { perfis:"p_", vidros:"v_", acm:"acm_", acess:"a_" }[matCatAtual]; state.materiais[matCatAtual].push({ id: prefix+uid(), nome:"Novo", preco:0 }); save(); render(); }
-function salvarParams(){ state.params = { chapaVidro:{ w:+document.getElementById("cv_w").value, h:+document.getElementById("cv_h").value }, chapaACM:{ w:+document.getElementById("ca_w").value, h:+document.getElementById("ca_h").value }, barraPerfil:+document.getElementById("bp_l").value, kerf:+document.getElementById("kerf").value, bdi:+document.getElementById("bdi").value, frete:+document.getElementById("frete").value, instalacao:+document.getElementById("instal").value, desconto:+document.getElementById("desc").value, imposto:+document.getElementById("imp").value }; save(); render(); toast("Parâmetros salvos"); }
+function salvarParams(){ state.params = { chapaVidro:{ w:+document.getElementById("cv_w").value, h:+document.getElementById("cv_h").value }, chapaACM:{ w:+document.getElementById("ca_w").value, h:+document.getElementById("ca_h").value }, barraPerfil:+document.getElementById("bp_l").value, kerf:+document.getElementById("kerf").value, bdi:+document.getElementById("bdi").value, frete:+document.getElementById("frete").value, instalacao:+document.getElementById("instal").value, imposto:+document.getElementById("imp").value }; save(); render(); toast("Parâmetros salvos"); }
 
 /* =====================================================================
    RESULTADO
    ===================================================================== */
 function renderResultado(g){
-  document.getElementById("kpis").innerHTML = `<div class="grid g4"><div class="kpi"><div class="l">Custo Direto</div><div class="v">${fmt(g.custoDireto)}</div></div><div class="kpi"><div class="l">BDI (${state.params.bdi}%)</div><div class="v">${fmt(g.bdiValor)}</div></div><div class="kpi"><div class="l">Impostos</div><div class="v">${fmt(g.impostoVal)}</div></div><div class="kpi"><div class="l">Frete + Inst.</div><div class="v">${fmt(state.params.frete+state.params.instalacao)}</div></div><div class="kpi"><div class="l">Desconto</div><div class="v">- ${fmt(state.params.desconto)}</div></div><div class="kpi" style="border-left-color:var(--ok)"><div class="l">TOTAL FINAL</div><div class="v tot">${fmt(g.total)}</div></div></div><table style="margin-top:12px"><tr><td>🔩 Perfis</td><td style="text-align:right">${fmt(g.custo.perfis)}</td></tr><tr><td>🪟 Vidros</td><td style="text-align:right">${fmt(g.custo.vidros)}</td></tr><tr><td>🧱 ACM</td><td style="text-align:right">${fmt(g.custo.acm)}</td></tr><tr><td>🔧 Acessórios</td><td style="text-align:right">${fmt(g.custo.acess)}</td></tr></table>`;
+  document.getElementById("kpis").innerHTML = `<div class="grid g4"><div class="kpi"><div class="l">Custo Direto</div><div class="v">${fmt(g.custoDireto)}</div></div><div class="kpi"><div class="l">BDI (${state.params.bdi}%)</div><div class="v">${fmt(g.bdiValor)}</div></div><div class="kpi"><div class="l">Impostos</div><div class="v">${fmt(g.impostoVal)}</div></div><div class="kpi"><div class="l">Frete + Inst.</div><div class="v">${fmt(state.params.frete+state.params.instalacao)}</div></div><div class="kpi"><div class="l">Desconto</div><div class="v">- ${fmt(state.orcamento.desconto)}</div></div><div class="kpi" style="border-left-color:var(--ok)"><div class="l">TOTAL FINAL</div><div class="v tot">${fmt(g.total)}</div></div></div><table style="margin-top:12px"><tr><td>🔩 Perfis</td><td style="text-align:right">${fmt(g.custo.perfis)}</td></tr><tr><td>🪟 Vidros</td><td style="text-align:right">${fmt(g.custo.vidros)}</td></tr><tr><td>🧱 ACM</td><td style="text-align:right">${fmt(g.custo.acm)}</td></tr><tr><td>🔧 Acessórios</td><td style="text-align:right">${fmt(g.custo.acess)}</td></tr></table>`;
 
   document.getElementById("resumoAmb").innerHTML = state.ambientes.map(a=>{
     const t = g.porAmbiente[a.id] || {estrutura:0, perfis:0,vidros:0,acm:0,acess:0,total:0};
@@ -897,8 +910,6 @@ function renderChapas(corte, titulo){ return corte.chapas.map((ch,i)=>`<div styl
    ===================================================================== */
 function gerarHTMLProposta(g, isCliente){
   const o = state.orcamento, dataVenc = new Date(new Date(o.data||Date.now()).getTime() + (o.validade||15)*86400000);
-  
-  // Calcula os valores de venda por item para a proposta do cliente
   const fatorVenda = (1 + (state.params.bdi/100)) * (1 + (state.params.imposto/100));
   
   return `<div style="border:1px solid var(--line);border-radius:10px;padding:20px;background:#0d1728">
@@ -910,13 +921,11 @@ function gerarHTMLProposta(g, isCliente){
         <tbody>
           ${state.ambientes.map(a => {
             let rows = '';
-            // Linha da Estrutura Base
             const totEst = g.porAmbiente[a.id]?.estrutura || 0;
             if(totEst > 0) {
               const valEst = isCliente ? (totEst * fatorVenda) : totEst;
               rows += `<tr style="background:rgba(255,255,255,0.03)"><td>${escapeHtml(a.nome)}</td><td><b>Estrutura Base / Fechamentos</b></td><td style="text-align:right">${a.largura}mm</td><td>Sustentação</td><td class="small">${corPill(a.corPerfil,"🔩 ")} ${corPill(a.corVidro,"🪟 ")}</td><td style="text-align:right">${fmt(valEst)}</td></tr>`;
             }
-            // Linhas dos Vãos
             (a.vaos||[]).forEach(v => {
               const totVao = v._custo?.total || 0;
               const valVao = isCliente ? (totVao * fatorVenda) : totVao;
@@ -936,7 +945,7 @@ function gerarHTMLProposta(g, isCliente){
       <table>
         ${isCliente ? `
           <tr><td>Valor dos Produtos</td><td style="text-align:right">${fmt(g.subtotal)}</td></tr>
-          <tr><td>Desconto Comercial</td><td style="text-align:right; color:var(--err)">- ${fmt(state.params.desconto)}</td></tr>
+          <tr><td>Desconto Comercial</td><td style="text-align:right; color:var(--err)">- ${fmt(o.desconto || 0)}</td></tr>
           <tr style="border-top:2px solid var(--acc2)"><td><b>VALOR TOTAL DO PROJETO</b></td><td style="text-align:right" class="tot">${fmt(g.total)}</td></tr>
         ` : `
           <tr><td>Custo Direto</td><td style="text-align:right">${fmt(g.custoDireto)}</td></tr>
@@ -944,7 +953,7 @@ function gerarHTMLProposta(g, isCliente){
           <tr><td>Impostos (${state.params.imposto}%)</td><td style="text-align:right">${fmt(g.impostoVal)}</td></tr>
           <tr><td>Frete</td><td style="text-align:right">${fmt(state.params.frete)}</td></tr>
           <tr><td>Instalação</td><td style="text-align:right">${fmt(state.params.instalacao)}</td></tr>
-          <tr><td>Desconto</td><td style="text-align:right">- ${fmt(state.params.desconto)}</td></tr>
+          <tr><td>Desconto</td><td style="text-align:right">- ${fmt(o.desconto || 0)}</td></tr>
           <tr style="border-top:2px solid var(--acc2)"><td><b>TOTAL</b></td><td style="text-align:right" class="tot">${fmt(g.total)}</td></tr>
         `}
       </table>
@@ -954,7 +963,6 @@ function gerarHTMLProposta(g, isCliente){
 
 function renderProposta(g){
   const box = document.getElementById("propostaComercial");
-  // Renderiza ambas as versões no HTML, o CSS vai esconder a indesejada na hora de imprimir
   box.innerHTML = `
     <div class="internal-box" style="display:none">${gerarHTMLProposta(g, false)}</div>
     <div class="client-box">${gerarHTMLProposta(g, true)}</div>
@@ -987,7 +995,7 @@ function renderHistorico(){ const box = document.getElementById("listaHist"); bo
    ===================================================================== */
 function exportJSON(){ const blob = new Blob([JSON.stringify({state, hist}, null, 2)], {type:"application/json"}); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `orcamento-${state.orcamento.numero||"orc"}.json`; a.click(); }
 function importJSON(e){ const f = e.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = () => { try{ const d = JSON.parse(r.result); if(d.state){ state = normalizeState(d.state); if(d.hist){ hist = d.hist; saveHist(); } } else state = normalizeState(d); state.orcamento.salvoNaNuvem = true; save(); render(); toast("Importado!"); }catch(err){ toast("Arquivo inválido", true); } }; r.readAsText(f); }
-function resetAll(){ if(!confirm("Zerar TUDO?")) return; ["orcProQually_v10","orcProQually_v9","orcProQually_v8","orcProQually_v7","orcProQually_v6","orcProQually_v5","orcProQually_hist","orcPro_v4","orcPro_v3","orcPro_v2","orcPro_hist"].forEach(k => localStorage.removeItem(k)); state = novoEstado(); hist = []; render(); toast("Zerado"); }
+function resetAll(){ if(!confirm("Zerar TUDO?")) return; ["orcProQually_v11","orcProQually_v10","orcProQually_v9","orcProQually_v8","orcProQually_v7","orcProQually_v6","orcProQually_v5","orcProQually_hist","orcPro_v4","orcPro_v3","orcPro_v2","orcPro_hist"].forEach(k => localStorage.removeItem(k)); state = novoEstado(); hist = []; render(); toast("Zerado"); }
 
 /* =====================================================================
    TABS
