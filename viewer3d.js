@@ -135,7 +135,7 @@
     this.render();
   };
 
-   Viewer.prototype.toggleOpaco = function () {
+     Viewer.prototype.toggleOpaco = function () {
     this.vidroOpaco = !this.vidroOpaco;
     const btn = document.getElementById("btnOpaco");
     if (btn) {
