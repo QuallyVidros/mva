@@ -445,12 +445,13 @@
     return alpha >= 1 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${alpha})`;
   };
 
-  Viewer.prototype._desenharCotas = function (ctx, amb, dados) {
+    Viewer.prototype._desenharCotas = function (ctx, amb, dados) {
     const { L, A, P, ox, oy, oz, esp } = dados;
     ctx.save();
     ctx.strokeStyle = COR_COTA; ctx.fillStyle = COR_COTA; ctx.lineWidth = 1.5;
     ctx.font = "bold 11px system-ui,Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
 
+    // Cotas gerais do móvel
     const pL1 = this._proj(ox, oy - 90, oz + P); const pL2 = this._proj(ox + L, oy - 90, oz + P); this._cotaLinha(ctx, pL1, pL2, `${L}mm`, "h");
     const pA1 = this._proj(ox - 90, oy, oz + P); const pA2 = this._proj(ox - 90, oy + A, oz + P); this._cotaLinha(ctx, pA1, pA2, `${A}mm`, "v");
     const pP1 = this._proj(ox + L + 90, oy - 20, oz); const pP2 = this._proj(ox + L + 90, oy - 20, oz + P); this._cotaLinha(ctx, pP1, pP2, `${P}mm`, "d");
@@ -458,13 +459,34 @@
     let xCursor = 0;
     (amb.vaos || []).forEach(v => {
       const vw = +v.largura, vx = ox + xCursor;
-      const yBase = oy - 35, zBase = oz + P + 5;
+      const yBase = oy - 35, zBase = oz + P + 5; // Base para a cota de largura
+      
+      // Cota de largura do vão (embaixo)
       const v1 = this._proj(vx + esp, yBase, zBase); const v2 = this._proj(vx + vw - esp, yBase, zBase);
       this._cotaLinha(ctx, v1, v2, `${vw}mm`, "h", true);
 
-      const vMid = this._proj(vx + vw / 2, yBase + 25, zBase);
-      ctx.font = "bold 10px system-ui,Arial"; ctx.fillStyle = COR_COTA; ctx.fillText(v.descricao || nomeTipoVao(v.tipo), vMid.x, vMid.y);
+      // ==========================================
+      // AQUI ESTÁ A CORREÇÃO DO NOME DO VÃO
+      // ==========================================
+      // Calculamos o centro exato do vão: (Base + Altura/2)
+      const yCentroVao = oy + (A / 2); 
+      // Puxamos o texto para a frente (oz + P + 10) para não ficar escondido dentro do vidro
+      const vMid = this._proj(vx + vw / 2, yCentroVao, oz + P + 10); 
+      
+      ctx.font = "bold 14px system-ui,Arial";
+      ctx.fillStyle = COR_COTA;
+      
+      // Adiciona um fundo semi-transparente para o texto não se perder no vidro
+      const txt = v.descricao || nomeTipoVao(v.tipo);
+      const txtW = ctx.measureText(txt).width + 10;
+      ctx.fillStyle = "rgba(11, 18, 32, 0.75)";
+      ctx.fillRect(vMid.x - txtW/2, vMid.y - 10, txtW, 20);
+      
+      // Desenha o texto centralizado
+      ctx.fillStyle = COR_COTA;
+      ctx.fillText(txt, vMid.x, vMid.y);
 
+      // Cotas de Gaveta / Porta
       const nPortas = Math.max(1, v.gavetasPortas || 1);
       const isGaveta = (v.tipo === "gaveta" || v.tipo === "gaveta_dupla");
       const isPorta = ["porta_simples", "porta_dupla", "porta_tempero", "cristaleira", "nicho"].includes(v.tipo);
