@@ -544,3 +544,12 @@ body.printing-proposta-cliente #tab-proposta .client-box   { display: block !imp
   .card{padding:12px}
   #viewer3D{height:380px}
 }
+/* =====================================================================
+   BOTÃO OPACO (Visualização 3D)
+   ===================================================================== */
+#btnOpaco.on {
+  background: var(--acc2) !important; /* Ciano */
+  color: #04121f !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.4);
+}
