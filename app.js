@@ -1419,11 +1419,19 @@ function renderAmbientes() {
 function renderVao(a, v) {
   const t = TIPOS_VAO[v.tipo];
   const gav = (v.tipo === "gaveta" || v.tipo === "gaveta_dupla");
-  const portas = ["porta_simples", "porta_dupla", "porta_tempero", "cristaleira"].includes(v.tipo);
+  const portas = ["porta_simples", "porta_dupla", "porta_tempero", "cristaleira", "nicho"].includes(v.tipo);
+  
   const comp = state.composicoes[v.tipo];
-  const temPrat = !!(comp && comp.prateleiras && comp.prateleiras.ativo);
+  
+  // --- ALTERAÇÃO AQUI ---
+  // Força a exibição se for um tipo que aceita prateleira
+  const aceitaPrat = ["porta_simples", "porta_dupla", "porta_tempero", "cristaleira", "nicho"].includes(v.tipo);
+  const temPrat = aceitaPrat || !!(comp && comp.prateleiras && comp.prateleiras.ativo);
+  // ----------------------
+
   const corP = v.corPerfil || "A definir";
   const corV = v.corVidro || "A definir";
+  
   return `<div class="vao">
     <div class="flex-between">
       <div class="row">
@@ -1438,6 +1446,7 @@ function renderVao(a, v) {
       </div>
       <button class="btn err xs no-print" onclick="removeVao('${a.id}','${v.id}')">✕</button>
     </div>
+    
     <div class="grid g4 no-print" style="margin-top:8px">
       <div><label>Tipo</label><select onchange="upVao('${a.id}','${v.id}','tipo',this.value)">
         ${Object.entries(TIPOS_VAO).map(([k, x]) => `<option value="${k}" ${v.tipo === k ? "selected" : ""}>${x.icone} ${x.nome}</option>`).join("")}
@@ -1451,12 +1460,14 @@ function renderVao(a, v) {
         ${CORES_VIDRO.map(c => `<option value="${c}" ${corV === c ? "selected" : ""}>${c}</option>`).join("")}
       </select></div>
     </div>
+    
     ${temPrat ? `<div class="subcard no-print" style="margin-top:8px">
       <div class="row">
         <label style="margin:0"><input type="checkbox" ${v.temPrateleiras ? "checked" : ""} onchange="upVao('${a.id}','${v.id}','temPrateleiras',this.checked)" style="margin-right:6px"> 📚 Incluir prateleiras</label>
-        ${v.temPrateleiras ? `<div><label>Qtd</label><input type="number" min="1" value="${v.qtdPrateleiras || comp.prateleiras.qtd || 2}" onchange="upVao('${a.id}','${v.id}','qtdPrateleiras',+this.value)" style="width:90px"></div>` : ""}
+        ${v.temPrateleiras ? `<div><label>Qtd</label><input type="number" min="1" value="${v.qtdPrateleiras || 2}" onchange="upVao('${a.id}','${v.id}','qtdPrateleiras',+this.value)" style="width:90px"></div>` : ""}
       </div>
     </div>` : ""}
+    
     ${v._detalhe ? `<div class="mods">
       <span class="mod">🔩 ${v._detalhe.perfis.length} perfis</span>
       <span class="mod">🪟 ${v._detalhe.vidros.length} vidros</span>
