@@ -1,11 +1,13 @@
 /* =====================================================================
-   viewer3d.js — v8.1
-   Visualização 3D isométrica com:
-   - Cotas: largura total, altura, profundidade, largura de vão,
-     altura de cada gaveta, largura/altura de cada porta,
-     e espessura do perfil (18mm)
-   - Cores personalizadas (perfil, vidro, prateleira, puxador)
-   - Modos: sólido, wireframe, transparente
+   viewer3d.js — v9.0
+   Visualização 3D fotorrealista com:
+   - Fundo opcional (escuro / branco studio)
+   - Snapshot com fundo branco automático
+   - Gradientes por face (efeito de volume)
+   - Sombreamento por normal
+   - Reflexo no vidro
+   - Sombra no chão
+   - Cotas: L, A, P, largura de vão, altura de gaveta/porta
    - Explosão 3D
    ===================================================================== */
 
@@ -37,9 +39,10 @@
   const COR_PUXADOR  = "#c0c8d4";
   const COR_COTA     = "#fbbf24";
   const COR_COTA_TXT = "#0b1220";
-  const COR_BASE_ACM = "#5c4033";
+  const COR_BASE_ACM = "#3d2818";
   const COR_PRAT     = "#a855f7";
   const COR_PRAT_BRD = "#7e22ce";
+  const COR_REFLExo  = "#ffffff";
 
   function corDoPerfil(cor) { return CORES_PERFIL_HEX[cor] || "#64748b"; }
   function corDoVidro(cor) { return CORES_VIDRO_HEX[cor] || "#cfeaff"; }
@@ -52,6 +55,24 @@
     const g2 = Math.max(0, Math.min(255, Math.round(g * fator)));
     const b2 = Math.max(0, Math.min(255, Math.round(b * fator)));
     return "#" + [r2, g2, b2].map(v => v.toString(16).padStart(2, "0")).join("");
+  }
+
+  function clarear(hex, fator) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const r2 = Math.max(0, Math.min(255, Math.round(r + (255 - r) * fator)));
+    const g2 = Math.max(0, Math.min(255, Math.round(g + (255 - g) * fator)));
+    const b2 = Math.max(0, Math.min(255, Math.round(b + (255 - b) * fator)));
+    return "#" + [r2, g2, b2].map(v => v.toString(16).padStart(2, "0")).join("");
+  }
+
+  function hexToRgb(hex) {
+    return {
+      r: parseInt(hex.slice(1, 3), 16),
+      g: parseInt(hex.slice(3, 5), 16),
+      b: parseInt(hex.slice(5, 7), 16)
+    };
   }
 
   function escapeHtmlLocal(s) {
@@ -84,9 +105,6 @@
     lateral:  { rotX: 0.05,  rotY: 1.2,   zoom: 1.0 }
   };
 
-  /* =====================================================================
-     MATEMÁTICA
-     ===================================================================== */
   function rotY(p, a) {
     const c = Math.cos(a), s = Math.sin(a);
     return [p[0] * c + p[2] * s, p[1], -p[0] * s + p[2] * c];
@@ -117,6 +135,7 @@
     this._onSnapshot = null;
     this.explosao = 0;
     this.explosaoAtiva = false;
+    this.fundoBranco = false;   // ← NOVO: fundo do canvas
   }
 
   Viewer.prototype.init = function (opts) {
@@ -230,6 +249,17 @@
     this.render();
   };
 
+  Viewer.prototype.toggleFundo = function () {
+    this.fundoBranco = !this.fundoBranco;
+    const btn = document.getElementById("btnFundo");
+    if (btn) btn.classList.toggle("on", this.fundoBranco);
+    // Ajusta o estilo do canvas
+    this.canvas.style.background = this.fundoBranco
+      ? "radial-gradient(circle at 30% 20%, #ffffff, #e8ecf1)"
+      : "radial-gradient(circle at 30% 20%, #1a2743, #0a1526)";
+    this.render();
+  };
+
   Viewer.prototype.toggleExplosao = function () {
     this.explosaoAtiva = !this.explosaoAtiva;
     this.explosao = this.explosaoAtiva ? 0.5 : 0;
@@ -248,21 +278,57 @@
     this.render();
   };
 
+  /* =====================================================================
+     SNAPSHOT — com fundo branco automático
+     ===================================================================== */
   Viewer.prototype.snapshot = function (paraPrint) {
     if (!this.canvas) return;
-    const dataURL = this.canvas.toDataURL("image/png");
+
+    // 1) Guarda o fundo atual (CSS)
+    const fundoAntes = this.canvas.style.background;
+    const fundoBrancoAntes = this.fundoBranco;
+
+    // 2) Força fundo branco temporariamente
+    this.fundoBranco = true;
+    this.canvas.style.background = "#ffffff";
+
+    // 3) Re-renderiza com fundo branco
+    this.render();
+
+    // 4) Força preenchimento branco direto no contexto (garantia)
+    const ctx = this.ctx;
+    const W = this.canvas.clientWidth;
+    const H = this.canvas.clientHeight;
+    const dpr = window.devicePixelRatio || 1;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = "destination-over";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.restore();
+
+    // 5) Captura
+    const dataURL = this.canvas.toDataURL("image/png", 1.0);
+
+    // 6) Restaura estado original
+    this.fundoBranco = fundoBrancoAntes;
+    this.canvas.style.background = fundoAntes;
+    this.render();
+
+    // 7) Saída
     const el = document.getElementById("viewerSnapshot");
-    if (!el) return;
     if (paraPrint) {
-      el.innerHTML = `<img src="${dataURL}" style="width:100%;max-width:780px;border-radius:8px;border:1px solid #999">`;
-      el.style.display = "block";
+      if (el) {
+        el.innerHTML = `<img src="${dataURL}" style="width:100%;max-width:780px;border-radius:8px;border:1px solid #999;background:#fff">`;
+        el.style.display = "block";
+      }
       return;
     }
     const a = document.createElement("a");
     a.href = dataURL;
     a.download = `visualizacao-${Date.now()}.png`;
     a.click();
-    if (this._onSnapshot) this._onSnapshot("📸 PNG baixado");
+    if (this._onSnapshot) this._onSnapshot("📸 PNG baixado (fundo branco)");
   };
 
   /* =====================================================================
@@ -293,8 +359,8 @@
 
     const corPerfil = corDoPerfil(amb.corPerfil);
     const corVidro = corDoVidro(amb.corVidro);
-    const corPerfilBorda = escurecer(corPerfil, 0.6);
-    const corVidroBorda = escurecer(corVidro, 0.65);
+    const corPerfilBorda = escurecer(corPerfil, 0.55);
+    const corVidroBorda = escurecer(corVidro, 0.6);
 
     const EXPL = this.explosao;
     const centro = [0, 0, 0];
@@ -323,11 +389,15 @@
         ]);
       }
       const n = normal(ptsFinal);
-      const shade = 0.75 + 0.25 * Math.max(0, n[1]);
+      // Sombreamento: faces para cima ficam claras, para baixo escuras
+      const ny = n[1];
+      const shade = 0.75 + 0.25 * Math.max(0, ny);
+      // Cor efetiva com sombreamento aplicado
+      const corFinal = clarear(escurecer(cor, shade * 0.9 + 0.1), (1 - shade) * 0.3);
       const cx = (ptsFinal[0][0] + ptsFinal[1][0] + ptsFinal[2][0] + ptsFinal[3][0]) / 4;
       const cy = (ptsFinal[0][1] + ptsFinal[1][1] + ptsFinal[2][1] + ptsFinal[3][1]) / 4;
       const cz = (ptsFinal[0][2] + ptsFinal[1][2] + ptsFinal[2][2] + ptsFinal[3][2]) / 4;
-      faces.push({ pts: ptsFinal, cor, alpha, tipo, shade, cx, cy, cz });
+      faces.push({ pts: ptsFinal, cor, corFinal, alpha, tipo, shade, cx, cy, cz, normal: n });
     }
 
     function addBox(x, y, z, dx, dy, dz, cor, alpha, tipoBox) {
@@ -340,42 +410,41 @@
       addFace([[x, y, z], [x + dx, y, z], [x + dx, y, z + dz], [x, y, z + dz]], cor, alpha, tipoBox);
     }
 
-    // ===== Painel frontal (vidro) =====
+    // Painel frontal (vidro)
     addFace(
       [[ox, oy, oz + P], [ox + L, oy, oz + P], [ox + L, oy + A, oz + P], [ox, oy + A, oz + P]],
-      corVidro, 0.3, "vidro"
+      corVidro, 0.22, "vidro"
     );
-    // Base ACM
+    // Base ACM (madeira escura)
     addFace(
       [[ox, oy, oz], [ox + L, oy, oz], [ox + L, oy, oz + P], [ox, oy, oz + P]],
-      COR_BASE_ACM, 0.85, "acm"
+      COR_BASE_ACM, 0.95, "acm"
     );
     // Topo perfil
     addFace(
       [[ox, oy + A, oz], [ox + L, oy + A, oz], [ox + L, oy + A, oz + P], [ox, oy + A, oz + P]],
-      corPerfil, 0.95, "perfil"
+      corPerfil, 0.98, "perfil"
     );
-    // Fundo / Laterais
     if (vis === "todos") {
       addFace(
         [[ox, oy, oz], [ox + L, oy, oz], [ox + L, oy + A, oz], [ox, oy + A, oz]],
-        corVidro, 0.2, "vidro"
+        corVidro, 0.18, "vidro"
       );
     }
     if (vis === "frente_1" || vis === "frente_2" || vis === "todos") {
       addFace(
         [[ox, oy, oz], [ox, oy, oz + P], [ox, oy + A, oz + P], [ox, oy + A, oz]],
-        corVidro, 0.2, "vidro"
+        corVidro, 0.18, "vidro"
       );
     }
     if (vis === "frente_2" || vis === "todos") {
       addFace(
         [[ox + L, oy, oz], [ox + L, oy, oz + P], [ox + L, oy + A, oz + P], [ox + L, oy + A, oz]],
-        corVidro, 0.2, "vidro"
+        corVidro, 0.18, "vidro"
       );
     }
 
-    // ===== Vãos =====
+    // Vãos
     const esp = 18;
     let xCursor = 0;
 
@@ -402,30 +471,28 @@
           addFace(
             [[vx + esp + 2, gy + 2, oz + P - 3], [vxEnd - esp - 2, gy + 2, oz + P - 3],
              [vxEnd - esp - 2, gy + hG - 2, oz + P - 3], [vx + esp + 2, gy + hG - 2, oz + P - 3]],
-            corVidro, 0.4, "vidro"
+            corVidro, 0.85, "gaveta"
           );
+          // Borda da gaveta
+          addBox(vx + esp, gy, oz + P - 4, vw - 2 * esp, 2, 2, escurecer(corPerfil, 0.7), 1, "perfil");
           if (gi < n - 1) {
             addBox(vx + esp, gy + hG - 2, oz, vw - 2 * esp, 4, P, corPerfil, 1, "perfil");
           }
         }
       } else if (isPorta) {
-        // Porta(s) dividida(s)
         const largPorta = (vw - 2 * esp - (nPortas - 1) * esp) / nPortas;
         for (let pi = 0; pi < nPortas; pi++) {
           const px = vx + esp + pi * (largPorta + esp);
           addFace(
             [[px, oy + esp, oz + P - 3], [px + largPorta, oy + esp, oz + P - 3],
              [px + largPorta, oy + A - esp, oz + P - 3], [px, oy + A - esp, oz + P - 3]],
-            corVidro, 0.45, "vidro"
+            corVidro, 0.4, "vidro"
           );
-          // Divisória entre portas
           if (pi < nPortas - 1) {
             addBox(px + largPorta, oy + esp, oz, esp, A - 2 * esp, P, corPerfil, 1, "perfil");
           }
-          // Puxador de cada porta
           addBox(px + largPorta - esp - 40, oy + A - esp - 30, oz + P - 8, 30, 6, 6, COR_PUXADOR, 1, "acessorio");
         }
-        // Prateleiras
         if (v.temPrateleiras && v.qtdPrateleiras > 0) {
           const nP = +v.qtdPrateleiras;
           for (let pi = 0; pi < nP; pi++) {
@@ -433,12 +500,7 @@
             addFace(
               [[vx + esp, py - 2, oz + esp], [vxEnd - esp, py - 2, oz + esp],
                [vxEnd - esp, py - 2, oz + P - esp], [vx + esp, py - 2, oz + P - esp]],
-              COR_PRAT, 0.75, "prateleira"
-            );
-            addFace(
-              [[vx + esp, py + 2, oz + esp], [vxEnd - esp, py + 2, oz + esp],
-               [vxEnd - esp, py + 2, oz + P - esp], [vx + esp, py + 2, oz + P - esp]],
-              COR_PRAT_BRD, 0.75, "prateleira"
+              COR_PRAT, 0.9, "prateleira"
             );
           }
         }
@@ -446,7 +508,7 @@
         addFace(
           [[vx + esp, oy + esp, oz + P - 3], [vxEnd - esp, oy + esp, oz + P - 3],
            [vxEnd - esp, oy + A - esp, oz + P - 3], [vx + esp, oy + A - esp, oz + P - 3]],
-          "#22c55e", 0.5, "vidro"
+          "#22c55e", 0.7, "vidro"
         );
       }
 
@@ -465,6 +527,21 @@
     const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
     ctx.clearRect(0, 0, W, H);
 
+    // Fundo
+    if (this.fundoBranco) {
+      const grad = ctx.createRadialGradient(W / 2, H * 0.2, 50, W / 2, H, Math.max(W, H));
+      grad.addColorStop(0, "#ffffff");
+      grad.addColorStop(1, "#e8ecf1");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      const grad = ctx.createRadialGradient(W * 0.3, H * 0.2, 50, W / 2, H / 2, Math.max(W, H));
+      grad.addColorStop(0, "#1a2743");
+      grad.addColorStop(1, "#0a1526");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+    }
+
     const state = this._getState();
     const amb = state.ambientes[this.ambIdx];
     const msgEl = document.getElementById("viewerMsg");
@@ -479,10 +556,16 @@
       return;
     }
     if (msgEl) msgEl.style.display = "none";
-    if (hudEl) hudEl.textContent = `${amb.nome} · ${amb.largura}×${amb.altura}×${amb.profundidade}mm · ${this.modo}${this.cotas ? " · cotas" : ""}`;
+    if (hudEl) hudEl.textContent = `${amb.nome} · ${amb.largura}×${amb.altura}×${amb.profundidade}mm · ${this.modo}${this.cotas ? " · cotas" : ""}${this.fundoBranco ? " · studio" : ""}`;
 
     const dados = this._gerarFaces(amb);
 
+    // ===== Sombra no chão =====
+    if (this.modo !== "wireframe") {
+      this._desenharSombraChao(ctx, dados);
+    }
+
+    // Projeção + ordenação
     const proj = dados.faces.map(f => {
       let c = [f.cx, f.cy, f.cz];
       c = rotY(c, this.rotY);
@@ -491,6 +574,7 @@
     });
     proj.sort((a, b) => b.zReal - a.zReal);
 
+    // Desenho
     proj.forEach(({ face, screenPts }) => {
       ctx.beginPath();
       ctx.moveTo(screenPts[0].x, screenPts[0].y);
@@ -499,34 +583,54 @@
 
       if (this.modo === "wireframe") {
         let corLinha;
-        if (face.tipo === "vidro") corLinha = escurecer(dados.corVidro, 0.7);
+        if (face.tipo === "vidro") corLinha = escurecer(dados.corVidro, 0.6);
         else if (face.tipo === "prateleira") corLinha = COR_PRAT;
         else if (face.tipo === "acessorio") corLinha = COR_PUXADOR;
         else if (face.tipo === "acm") corLinha = COR_BASE_ACM;
+        else if (face.tipo === "gaveta") corLinha = escurecer(dados.corVidro, 0.5);
         else corLinha = dados.corPerfil;
         ctx.strokeStyle = corLinha;
         ctx.lineWidth = 1.2;
         ctx.stroke();
       } else if (this.modo === "solido") {
-        ctx.fillStyle = this._aplicarShade(face.cor, face.shade, face.alpha);
+        // Preenchimento
+        ctx.fillStyle = this._aplicarAlpha(face.corFinal, face.alpha);
         ctx.fill();
+
+        // Reflexo no vidro (linha diagonal branca)
+        if (face.tipo === "vidro" || face.tipo === "gaveta") {
+          const p0 = screenPts[0], p2 = screenPts[2];
+          const gradRefl = ctx.createLinearGradient(p0.x, p0.y, p2.x, p2.y);
+          gradRefl.addColorStop(0, "rgba(255,255,255,0)");
+          gradRefl.addColorStop(0.4, "rgba(255,255,255,0.15)");
+          gradRefl.addColorStop(0.5, "rgba(255,255,255,0.35)");
+          gradRefl.addColorStop(0.6, "rgba(255,255,255,0.15)");
+          gradRefl.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = gradRefl;
+          ctx.fill();
+        }
+
+        // Borda
         let corBorda;
         if (face.tipo === "vidro") corBorda = dados.corVidroBorda;
         else if (face.tipo === "prateleira") corBorda = COR_PRAT_BRD;
         else if (face.tipo === "acessorio") corBorda = "#6b7280";
-        else if (face.tipo === "acm") corBorda = escurecer(COR_BASE_ACM, 0.7);
+        else if (face.tipo === "acm") corBorda = escurecer(COR_BASE_ACM, 0.6);
+        else if (face.tipo === "gaveta") corBorda = escurecer(dados.corVidro, 0.5);
         else corBorda = dados.corPerfilBorda;
+
         ctx.strokeStyle = corBorda;
         ctx.lineWidth = 1;
         ctx.stroke();
       } else {
-        ctx.fillStyle = this._aplicarShade(face.cor, face.shade, 0.15);
+        ctx.fillStyle = this._aplicarAlpha(face.corFinal, 0.15);
         ctx.fill();
         let corBorda;
         if (face.tipo === "vidro") corBorda = dados.corVidroBorda;
         else if (face.tipo === "prateleira") corBorda = COR_PRAT;
         else if (face.tipo === "acessorio") corBorda = "#9ca3af";
         else if (face.tipo === "acm") corBorda = COR_BASE_ACM;
+        else if (face.tipo === "gaveta") corBorda = escurecer(dados.corVidro, 0.5);
         else corBorda = dados.corPerfil;
         ctx.strokeStyle = corBorda;
         ctx.lineWidth = 1.5;
@@ -537,18 +641,45 @@
     if (this.cotas) this._desenharCotas(ctx, amb, dados);
 
     this._renderLegenda(amb);
-    if (this._renderDetalhes) this._renderDetalhes(amb);
   };
 
-  Viewer.prototype._aplicarShade = function (hex, shade, alpha) {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    const r2 = Math.min(255, Math.round(r * shade));
-    const g2 = Math.min(255, Math.round(g * shade));
-    const b2 = Math.min(255, Math.round(b * shade));
-    if (alpha >= 1) return `rgb(${r2},${g2},${b2})`;
-    return `rgba(${r2},${g2},${b2},${alpha})`;
+  /* =====================================================================
+     SOMBRA NO CHÃO
+     ===================================================================== */
+  Viewer.prototype._desenharSombraChao = function (ctx, dados) {
+    const { L, P, ox, oy, oz } = dados;
+    // Centro do chão
+    const chaoY = oy - 5;
+    const p1 = this._proj(ox, chaoY, oz);
+    const p2 = this._proj(ox + L, chaoY, oz);
+    const p3 = this._proj(ox + L, chaoY, oz + P);
+    const p4 = this._proj(ox, chaoY, oz + P);
+
+    // Centro e raio aproximado
+    const cx = (p1.x + p3.x) / 2;
+    const cy = (p1.y + p3.y) / 2;
+    const rx = Math.hypot(p2.x - p1.x, p2.y - p1.y) * 0.55;
+    const ry = Math.hypot(p4.x - p1.x, p4.y - p1.y) * 0.55;
+
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry));
+    grad.addColorStop(0, "rgba(0,0,0,0.35)");
+    grad.addColorStop(0.6, "rgba(0,0,0,0.15)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(rx / Math.max(rx, ry), ry / Math.max(rx, ry));
+    ctx.beginPath();
+    ctx.arc(0, 0, Math.max(rx, ry), 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.restore();
+  };
+
+  Viewer.prototype._aplicarAlpha = function (hex, alpha) {
+    const { r, g, b } = hexToRgb(hex);
+    if (alpha >= 1) return `rgb(${r},${g},${b})`;
+    return `rgba(${r},${g},${b},${alpha})`;
   };
 
   /* =====================================================================
@@ -564,27 +695,22 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    // ===== Largura total =====
     const pL1 = this._proj(ox, oy - 90, oz + P);
     const pL2 = this._proj(ox + L, oy - 90, oz + P);
     this._cotaLinha(ctx, pL1, pL2, `${L}mm`, "h");
 
-    // ===== Altura =====
     const pA1 = this._proj(ox - 90, oy, oz + P);
     const pA2 = this._proj(ox - 90, oy + A, oz + P);
     this._cotaLinha(ctx, pA1, pA2, `${A}mm`, "v");
 
-    // ===== Profundidade =====
     const pP1 = this._proj(ox + L + 90, oy - 20, oz);
     const pP2 = this._proj(ox + L + 90, oy - 20, oz + P);
     this._cotaLinha(ctx, pP1, pP2, `${P}mm`, "d");
 
-    // ===== Espessura do perfil (18mm) — em cima do primeiro montante =====
     const e1 = this._proj(ox, oy + A + 15, oz + P);
     const e2 = this._proj(ox + esp, oy + A + 15, oz + P);
     this._cotaLinha(ctx, e1, e2, `${esp}mm`, "h", true);
 
-    // ===== Cotas de cada vão =====
     let xCursor = 0;
     (amb.vaos || []).forEach(v => {
       const vw = +v.largura;
@@ -592,12 +718,10 @@
       const yBase = oy - 35;
       const zBase = oz + P + 5;
 
-      // Largura do vão
       const v1 = this._proj(vx + esp, yBase, zBase);
       const v2 = this._proj(vx + vw - esp, yBase, zBase);
       this._cotaLinha(ctx, v1, v2, `${vw}mm`, "h", true);
 
-      // Nome do vão
       const vMid = this._proj(vx + vw / 2, yBase + 25, zBase);
       ctx.font = "bold 10px system-ui,Arial";
       ctx.fillStyle = COR_COTA;
@@ -607,7 +731,6 @@
       const isGaveta = (v.tipo === "gaveta" || v.tipo === "gaveta_dupla");
       const isPorta = ["porta_simples", "porta_dupla", "porta_tempero", "cristaleira", "nicho"].includes(v.tipo);
 
-      // ===== Cotas de gaveta =====
       if (isGaveta) {
         const n = v.tipo === "gaveta_dupla" ? nPortas * 2 : nPortas;
         const hG = (A - 2 * esp) / n;
@@ -617,7 +740,6 @@
           const g1 = this._proj(gx, gy, oz + P);
           const g2 = this._proj(gx, gy + hG, oz + P);
           this._cotaLinha(ctx, g1, g2, `${Math.round(hG)}`, "v", true);
-          // Linha de chamada até o centro da gaveta
           const c1 = this._proj(gx - 2, gy + hG / 2, oz + P);
           const c2 = this._proj(vx + vw - 3, gy + hG / 2, oz + P);
           ctx.save();
@@ -632,18 +754,14 @@
         }
       }
 
-      // ===== Cotas de porta dividida =====
       if (isPorta) {
         const largPorta = (vw - 2 * esp - (nPortas - 1) * esp) / nPortas;
         const altPorta = A - 2 * esp;
-
-        // Altura da porta (só 1x ao lado direito)
         const gx = vx + vw + 12;
         const g1 = this._proj(gx, oy + esp, oz + P);
         const g2 = this._proj(gx, oy + A - esp, oz + P);
         this._cotaLinha(ctx, g1, g2, `${Math.round(altPorta)}`, "v", true);
 
-        // Se tiver mais de 1 porta, cota cada porta em cima
         if (nPortas > 1) {
           for (let pi = 0; pi < nPortas; pi++) {
             const px = vx + esp + pi * (largPorta + esp);
@@ -651,8 +769,6 @@
             const p1 = this._proj(px, yTopo, oz + P);
             const p2 = this._proj(px + largPorta, yTopo, oz + P);
             this._cotaLinha(ctx, p1, p2, `${Math.round(largPorta)}`, "h", true);
-
-            // Número da porta dentro dela
             const num = this._proj(px + largPorta / 2, oy + A / 2, oz + P - 4);
             ctx.font = "bold 12px system-ui,Arial";
             ctx.fillStyle = "rgba(255,255,255,0.85)";
