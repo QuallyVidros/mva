@@ -1,11 +1,12 @@
 /* =====================================================================
-   viewer3d.js — v8.0
+   viewer3d.js — v8.1
    Visualização 3D isométrica com:
-   - Cotas completas (L, A, P + largura de vão + altura de gaveta)
-   - Cores personalizadas (perfil usa cor real, vidro usa cor real)
+   - Cotas: largura total, altura, profundidade, largura de vão,
+     altura de cada gaveta, largura/altura de cada porta,
+     e espessura do perfil (18mm)
+   - Cores personalizadas (perfil, vidro, prateleira, puxador)
    - Modos: sólido, wireframe, transparente
    - Explosão 3D
-   - Rotação e zoom por mouse/toque
    ===================================================================== */
 
 (function (global) {
@@ -33,19 +34,17 @@
     "A definir":  "#9bb5cc"
   };
 
-  const COR_ESTRUTURA = "#475569";
-  const COR_PUXADOR   = "#c0c8d4";
-  const COR_COTA      = "#fbbf24";
-  const COR_COTA_TXT  = "#0b1220";
+  const COR_PUXADOR  = "#c0c8d4";
+  const COR_COTA     = "#fbbf24";
+  const COR_COTA_TXT = "#0b1220";
+  const COR_BASE_ACM = "#5c4033";
+  const COR_PRAT     = "#a855f7";
+  const COR_PRAT_BRD = "#7e22ce";
 
-  function corDoPerfil(cor) {
-    return CORES_PERFIL_HEX[cor] || "#64748b";
-  }
-  function corDoVidro(cor) {
-    return CORES_VIDRO_HEX[cor] || "#cfeaff";
-  }
+  function corDoPerfil(cor) { return CORES_PERFIL_HEX[cor] || "#64748b"; }
+  function corDoVidro(cor) { return CORES_VIDRO_HEX[cor] || "#cfeaff"; }
+
   function escurecer(hex, fator) {
-    // fator < 1 = escurece, > 1 = clareia
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
     const b = parseInt(hex.slice(5, 7), 16);
@@ -54,11 +53,25 @@
     const b2 = Math.max(0, Math.min(255, Math.round(b * fator)));
     return "#" + [r2, g2, b2].map(v => v.toString(16).padStart(2, "0")).join("");
   }
-  function hexParaRgba(hex, alpha) {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r},${g},${b},${alpha})`;
+
+  function escapeHtmlLocal(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  function nomeTipoVao(tipo) {
+    const M = {
+      gaveta: "Gaveta",
+      gaveta_dupla: "Gaveta Dupla",
+      porta_tempero: "Porta Tempero",
+      lixeira: "Lixeira",
+      nicho: "Nicho",
+      porta_simples: "Porta",
+      porta_dupla: "Porta Dupla",
+      cristaleira: "Cristaleira"
+    };
+    return M[tipo] || tipo;
   }
 
   /* =====================================================================
@@ -72,7 +85,7 @@
   };
 
   /* =====================================================================
-     MATEMÁTICA 3D
+     MATEMÁTICA
      ===================================================================== */
   function rotY(p, a) {
     const c = Math.cos(a), s = Math.sin(a);
@@ -102,8 +115,6 @@
     this.animFrame = null;
     this._getState = null;
     this._onSnapshot = null;
-
-    // Explosão
     this.explosao = 0;
     this.explosaoAtiva = false;
   }
@@ -171,7 +182,6 @@
     }, { passive: false });
     window.addEventListener("resize", () => { this.resize(); this.render(); });
 
-    // Presets
     document.querySelectorAll("#cameraPresets button").forEach(b => {
       b.onclick = () => {
         const p = PRESETS[b.dataset.cam];
@@ -184,7 +194,6 @@
       };
     });
 
-    // Modos
     document.querySelectorAll("#modeGroup button").forEach(b => {
       b.onclick = () => {
         this.modo = b.dataset.mode;
@@ -257,7 +266,7 @@
   };
 
   /* =====================================================================
-     PROJEÇÃO 3D → 2D
+     PROJEÇÃO
      ===================================================================== */
   Viewer.prototype._proj = function (x, y, z) {
     let p = rotY([x, y, z], this.rotY);
@@ -274,7 +283,7 @@
   };
 
   /* =====================================================================
-     GERAR FACES 3D
+     GERAR FACES
      ===================================================================== */
   Viewer.prototype._gerarFaces = function (amb) {
     const faces = [];
@@ -282,11 +291,10 @@
     const ox = -L / 2, oy = -A / 2, oz = -P / 2;
     const vis = amb.visibilidade || "frente";
 
-    // Cores personalizadas
     const corPerfil = corDoPerfil(amb.corPerfil);
     const corVidro = corDoVidro(amb.corVidro);
     const corPerfilBorda = escurecer(corPerfil, 0.6);
-    const corVidroBorda = escurecer(corVidro, 0.7);
+    const corVidroBorda = escurecer(corVidro, 0.65);
 
     const EXPL = this.explosao;
     const centro = [0, 0, 0];
@@ -323,18 +331,12 @@
     }
 
     function addBox(x, y, z, dx, dy, dz, cor, alpha, tipoBox) {
-      tipoBox = tipoBox || "estrutura";
-      // frente
+      tipoBox = tipoBox || "perfil";
       addFace([[x, y, z + dz], [x + dx, y, z + dz], [x + dx, y + dy, z + dz], [x, y + dy, z + dz]], cor, alpha, tipoBox);
-      // fundo
       addFace([[x, y, z], [x + dx, y, z], [x + dx, y + dy, z], [x, y + dy, z]], cor, alpha, tipoBox);
-      // esquerda
       addFace([[x, y, z], [x, y, z + dz], [x, y + dy, z + dz], [x, y + dy, z]], cor, alpha, tipoBox);
-      // direita
       addFace([[x + dx, y, z], [x + dx, y, z + dz], [x + dx, y + dy, z + dz], [x + dx, y + dy, z]], cor, alpha, tipoBox);
-      // topo
       addFace([[x, y + dy, z], [x + dx, y + dy, z], [x + dx, y + dy, z + dz], [x, y + dy, z + dz]], cor, alpha, tipoBox);
-      // base
       addFace([[x, y, z], [x + dx, y, z], [x + dx, y, z + dz], [x, y, z + dz]], cor, alpha, tipoBox);
     }
 
@@ -343,31 +345,29 @@
       [[ox, oy, oz + P], [ox + L, oy, oz + P], [ox + L, oy + A, oz + P], [ox, oy + A, oz + P]],
       corVidro, 0.3, "vidro"
     );
-    // Base (ACM)
+    // Base ACM
     addFace(
       [[ox, oy, oz], [ox + L, oy, oz], [ox + L, oy, oz + P], [ox, oy, oz + P]],
-      "#5c4033", 0.85, "acm"
+      COR_BASE_ACM, 0.85, "acm"
     );
-    // Topo (borda fina)
+    // Topo perfil
     addFace(
       [[ox, oy + A, oz], [ox + L, oy + A, oz], [ox + L, oy + A, oz + P], [ox, oy + A, oz + P]],
-      corPerfil, 0.95, "estrutura"
+      corPerfil, 0.95, "perfil"
     );
-    // Fundo
+    // Fundo / Laterais
     if (vis === "todos") {
       addFace(
         [[ox, oy, oz], [ox + L, oy, oz], [ox + L, oy + A, oz], [ox, oy + A, oz]],
         corVidro, 0.2, "vidro"
       );
     }
-    // Lateral esquerda
     if (vis === "frente_1" || vis === "frente_2" || vis === "todos") {
       addFace(
         [[ox, oy, oz], [ox, oy, oz + P], [ox, oy + A, oz + P], [ox, oy + A, oz]],
         corVidro, 0.2, "vidro"
       );
     }
-    // Lateral direita
     if (vis === "frente_2" || vis === "todos") {
       addFace(
         [[ox + L, oy, oz], [ox + L, oy, oz + P], [ox + L, oy + A, oz + P], [ox + L, oy + A, oz]],
@@ -384,38 +384,48 @@
       const vx = ox + xCursor;
       const vxEnd = vx + vw;
 
-      // Moldura do vão
+      // Moldura
       addBox(vx, oy, oz, esp, A, P, corPerfil, 1, "perfil");
       addBox(vxEnd - esp, oy, oz, esp, A, P, corPerfil, 1, "perfil");
       addBox(vx + esp, oy + A - esp, oz, vw - 2 * esp, esp, P, corPerfil, 1, "perfil");
       addBox(vx + esp, oy, oz, vw - 2 * esp, esp, P, corPerfil, 1, "perfil");
 
-      const nGavetas = v.gavetasPortas || 1;
+      const nPortas = Math.max(1, v.gavetasPortas || 1);
+      const isGaveta = (v.tipo === "gaveta" || v.tipo === "gaveta_dupla");
+      const isPorta = ["porta_simples", "porta_dupla", "porta_tempero", "cristaleira", "nicho"].includes(v.tipo);
 
-      if (v.tipo === "gaveta" || v.tipo === "gaveta_dupla") {
-        const n = v.tipo === "gaveta_dupla" ? nGavetas * 2 : nGavetas;
+      if (isGaveta) {
+        const n = v.tipo === "gaveta_dupla" ? nPortas * 2 : nPortas;
         const hG = (A - 2 * esp) / n;
         for (let gi = 0; gi < n; gi++) {
           const gy = oy + esp + gi * hG;
-          // frente da gaveta (vidro)
           addFace(
             [[vx + esp + 2, gy + 2, oz + P - 3], [vxEnd - esp - 2, gy + 2, oz + P - 3],
              [vxEnd - esp - 2, gy + hG - 2, oz + P - 3], [vx + esp + 2, gy + hG - 2, oz + P - 3]],
             corVidro, 0.4, "vidro"
           );
-          // divisória entre gavetas (perfil)
           if (gi < n - 1) {
             addBox(vx + esp, gy + hG - 2, oz, vw - 2 * esp, 4, P, corPerfil, 1, "perfil");
           }
         }
-      } else if (["porta_simples", "porta_dupla", "porta_tempero", "cristaleira", "nicho"].includes(v.tipo)) {
-        // porta de vidro
-        addFace(
-          [[vx + esp, oy + esp, oz + P - 3], [vxEnd - esp, oy + esp, oz + P - 3],
-           [vxEnd - esp, oy + A - esp, oz + P - 3], [vx + esp, oy + A - esp, oz + P - 3]],
-          corVidro, 0.45, "vidro"
-        );
-        // prateleiras
+      } else if (isPorta) {
+        // Porta(s) dividida(s)
+        const largPorta = (vw - 2 * esp - (nPortas - 1) * esp) / nPortas;
+        for (let pi = 0; pi < nPortas; pi++) {
+          const px = vx + esp + pi * (largPorta + esp);
+          addFace(
+            [[px, oy + esp, oz + P - 3], [px + largPorta, oy + esp, oz + P - 3],
+             [px + largPorta, oy + A - esp, oz + P - 3], [px, oy + A - esp, oz + P - 3]],
+            corVidro, 0.45, "vidro"
+          );
+          // Divisória entre portas
+          if (pi < nPortas - 1) {
+            addBox(px + largPorta, oy + esp, oz, esp, A - 2 * esp, P, corPerfil, 1, "perfil");
+          }
+          // Puxador de cada porta
+          addBox(px + largPorta - esp - 40, oy + A - esp - 30, oz + P - 8, 30, 6, 6, COR_PUXADOR, 1, "acessorio");
+        }
+        // Prateleiras
         if (v.temPrateleiras && v.qtdPrateleiras > 0) {
           const nP = +v.qtdPrateleiras;
           for (let pi = 0; pi < nP; pi++) {
@@ -423,17 +433,15 @@
             addFace(
               [[vx + esp, py - 2, oz + esp], [vxEnd - esp, py - 2, oz + esp],
                [vxEnd - esp, py - 2, oz + P - esp], [vx + esp, py - 2, oz + P - esp]],
-              "#a855f7", 0.75, "prateleira"
+              COR_PRAT, 0.75, "prateleira"
             );
             addFace(
               [[vx + esp, py + 2, oz + esp], [vxEnd - esp, py + 2, oz + esp],
                [vxEnd - esp, py + 2, oz + P - esp], [vx + esp, py + 2, oz + P - esp]],
-              "#7e22ce", 0.75, "prateleira"
+              COR_PRAT_BRD, 0.75, "prateleira"
             );
           }
         }
-        // puxador
-        addBox(vxEnd - esp - 60, oy + A - esp - 30, oz + P - 8, 40, 6, 6, COR_PUXADOR, 1, "acessorio");
       } else if (v.tipo === "lixeira") {
         addFace(
           [[vx + esp, oy + esp, oz + P - 3], [vxEnd - esp, oy + esp, oz + P - 3],
@@ -445,7 +453,7 @@
       xCursor += vw;
     });
 
-    return { faces, L, A, P, ox, oy, oz, corPerfil, corVidro, corPerfilBorda, corVidroBorda };
+    return { faces, L, A, P, ox, oy, oz, corPerfil, corVidro, corPerfilBorda, corVidroBorda, esp };
   };
 
   /* =====================================================================
@@ -475,20 +483,14 @@
 
     const dados = this._gerarFaces(amb);
 
-    // Projeta e ordena por profundidade real
     const proj = dados.faces.map(f => {
       let c = [f.cx, f.cy, f.cz];
       c = rotY(c, this.rotY);
       c = rotX(c, this.rotX);
-      return {
-        face: f,
-        screenPts: f.pts.map(p => this._proj(p[0], p[1], p[2])),
-        zReal: c[2]
-      };
+      return { face: f, screenPts: f.pts.map(p => this._proj(p[0], p[1], p[2])), zReal: c[2] };
     });
     proj.sort((a, b) => b.zReal - a.zReal);
 
-    // Desenha faces
     proj.forEach(({ face, screenPts }) => {
       ctx.beginPath();
       ctx.moveTo(screenPts[0].x, screenPts[0].y);
@@ -496,36 +498,35 @@
       ctx.closePath();
 
       if (this.modo === "wireframe") {
-        // Só linhas, cor depende do tipo
         let corLinha;
         if (face.tipo === "vidro") corLinha = escurecer(dados.corVidro, 0.7);
-        else if (face.tipo === "prateleira") corLinha = "#a855f7";
+        else if (face.tipo === "prateleira") corLinha = COR_PRAT;
         else if (face.tipo === "acessorio") corLinha = COR_PUXADOR;
+        else if (face.tipo === "acm") corLinha = COR_BASE_ACM;
         else corLinha = dados.corPerfil;
         ctx.strokeStyle = corLinha;
         ctx.lineWidth = 1.2;
         ctx.stroke();
       } else if (this.modo === "solido") {
-        // Preenchimento com cor + sombreamento
         ctx.fillStyle = this._aplicarShade(face.cor, face.shade, face.alpha);
         ctx.fill();
-        // Contorno (mais escuro)
         let corBorda;
         if (face.tipo === "vidro") corBorda = dados.corVidroBorda;
-        else if (face.tipo === "prateleira") corBorda = "#7e22ce";
+        else if (face.tipo === "prateleira") corBorda = COR_PRAT_BRD;
         else if (face.tipo === "acessorio") corBorda = "#6b7280";
+        else if (face.tipo === "acm") corBorda = escurecer(COR_BASE_ACM, 0.7);
         else corBorda = dados.corPerfilBorda;
         ctx.strokeStyle = corBorda;
         ctx.lineWidth = 1;
         ctx.stroke();
       } else {
-        // Transparente: preenchimento fraco + contorno colorido
         ctx.fillStyle = this._aplicarShade(face.cor, face.shade, 0.15);
         ctx.fill();
         let corBorda;
         if (face.tipo === "vidro") corBorda = dados.corVidroBorda;
-        else if (face.tipo === "prateleira") corBorda = "#a855f7";
+        else if (face.tipo === "prateleira") corBorda = COR_PRAT;
         else if (face.tipo === "acessorio") corBorda = "#9ca3af";
+        else if (face.tipo === "acm") corBorda = COR_BASE_ACM;
         else corBorda = dados.corPerfil;
         ctx.strokeStyle = corBorda;
         ctx.lineWidth = 1.5;
@@ -533,10 +534,8 @@
       }
     });
 
-    // Cotas
     if (this.cotas) this._desenharCotas(ctx, amb, dados);
 
-    // Legenda + detalhes
     this._renderLegenda(amb);
     if (this._renderDetalhes) this._renderDetalhes(amb);
   };
@@ -556,7 +555,7 @@
      COTAS
      ===================================================================== */
   Viewer.prototype._desenharCotas = function (ctx, amb, dados) {
-    const { L, A, P, ox, oy, oz } = dados;
+    const { L, A, P, ox, oy, oz, esp } = dados;
     ctx.save();
     ctx.strokeStyle = COR_COTA;
     ctx.fillStyle = COR_COTA;
@@ -565,28 +564,32 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    // ===== Cota de Largura total (embaixo do móvel) =====
-    const pL1 = this._proj(ox, oy - 80, oz + P);
-    const pL2 = this._proj(ox + L, oy - 80, oz + P);
+    // ===== Largura total =====
+    const pL1 = this._proj(ox, oy - 90, oz + P);
+    const pL2 = this._proj(ox + L, oy - 90, oz + P);
     this._cotaLinha(ctx, pL1, pL2, `${L}mm`, "h");
 
-    // ===== Cota de Altura (lateral esquerda) =====
-    const pA1 = this._proj(ox - 80, oy, oz + P);
-    const pA2 = this._proj(ox - 80, oy + A, oz + P);
+    // ===== Altura =====
+    const pA1 = this._proj(ox - 90, oy, oz + P);
+    const pA2 = this._proj(ox - 90, oy + A, oz + P);
     this._cotaLinha(ctx, pA1, pA2, `${A}mm`, "v");
 
-    // ===== Cota de Profundidade (lateral direita) =====
-    const pP1 = this._proj(ox + L + 80, oy - 20, oz);
-    const pP2 = this._proj(ox + L + 80, oy - 20, oz + P);
+    // ===== Profundidade =====
+    const pP1 = this._proj(ox + L + 90, oy - 20, oz);
+    const pP2 = this._proj(ox + L + 90, oy - 20, oz + P);
     this._cotaLinha(ctx, pP1, pP2, `${P}mm`, "d");
 
-    // ===== Cotas de cada vão (largura) =====
-    const esp = 18;
+    // ===== Espessura do perfil (18mm) — em cima do primeiro montante =====
+    const e1 = this._proj(ox, oy + A + 15, oz + P);
+    const e2 = this._proj(ox + esp, oy + A + 15, oz + P);
+    this._cotaLinha(ctx, e1, e2, `${esp}mm`, "h", true);
+
+    // ===== Cotas de cada vão =====
     let xCursor = 0;
-    (amb.vaos || []).forEach((v, i) => {
+    (amb.vaos || []).forEach(v => {
       const vw = +v.largura;
       const vx = ox + xCursor;
-      const yBase = oy - 30;
+      const yBase = oy - 35;
       const zBase = oz + P + 5;
 
       // Largura do vão
@@ -595,30 +598,67 @@
       this._cotaLinha(ctx, v1, v2, `${vw}mm`, "h", true);
 
       // Nome do vão
-      const vMid = this._proj(vx + vw / 2, yBase + 20, zBase);
+      const vMid = this._proj(vx + vw / 2, yBase + 25, zBase);
       ctx.font = "bold 10px system-ui,Arial";
       ctx.fillStyle = COR_COTA;
-      ctx.fillText(v.descricao || TIPOS_VAO_NOME(v.tipo), vMid.x, vMid.y);
+      ctx.fillText(v.descricao || nomeTipoVao(v.tipo), vMid.x, vMid.y);
 
-      // ===== Altura de cada gaveta =====
-      if (v.tipo === "gaveta" || v.tipo === "gaveta_dupla") {
-        const n = v.tipo === "gaveta_dupla" ? v.gavetasPortas * 2 : v.gavetasPortas;
+      const nPortas = Math.max(1, v.gavetasPortas || 1);
+      const isGaveta = (v.tipo === "gaveta" || v.tipo === "gaveta_dupla");
+      const isPorta = ["porta_simples", "porta_dupla", "porta_tempero", "cristaleira", "nicho"].includes(v.tipo);
+
+      // ===== Cotas de gaveta =====
+      if (isGaveta) {
+        const n = v.tipo === "gaveta_dupla" ? nPortas * 2 : nPortas;
         const hG = (A - 2 * esp) / n;
         for (let gi = 0; gi < n; gi++) {
           const gy = oy + esp + gi * hG;
-          const gx = vx + vw + 10;
+          const gx = vx + vw + 12;
           const g1 = this._proj(gx, gy, oz + P);
           const g2 = this._proj(gx, gy + hG, oz + P);
           this._cotaLinha(ctx, g1, g2, `${Math.round(hG)}`, "v", true);
+          // Linha de chamada até o centro da gaveta
+          const c1 = this._proj(gx - 2, gy + hG / 2, oz + P);
+          const c2 = this._proj(vx + vw - 3, gy + hG / 2, oz + P);
+          ctx.save();
+          ctx.setLineDash([3, 3]);
+          ctx.strokeStyle = COR_COTA;
+          ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          ctx.moveTo(c1.x, c1.y);
+          ctx.lineTo(c2.x, c2.y);
+          ctx.stroke();
+          ctx.restore();
         }
       }
 
-      // ===== Altura de porta =====
-      if (["porta_simples", "porta_dupla", "porta_tempero", "cristaleira", "nicho"].includes(v.tipo)) {
-        const gx = vx + vw + 10;
+      // ===== Cotas de porta dividida =====
+      if (isPorta) {
+        const largPorta = (vw - 2 * esp - (nPortas - 1) * esp) / nPortas;
+        const altPorta = A - 2 * esp;
+
+        // Altura da porta (só 1x ao lado direito)
+        const gx = vx + vw + 12;
         const g1 = this._proj(gx, oy + esp, oz + P);
         const g2 = this._proj(gx, oy + A - esp, oz + P);
-        this._cotaLinha(ctx, g1, g2, `${A - 2 * esp}`, "v", true);
+        this._cotaLinha(ctx, g1, g2, `${Math.round(altPorta)}`, "v", true);
+
+        // Se tiver mais de 1 porta, cota cada porta em cima
+        if (nPortas > 1) {
+          for (let pi = 0; pi < nPortas; pi++) {
+            const px = vx + esp + pi * (largPorta + esp);
+            const yTopo = oy + A - esp + 20;
+            const p1 = this._proj(px, yTopo, oz + P);
+            const p2 = this._proj(px + largPorta, yTopo, oz + P);
+            this._cotaLinha(ctx, p1, p2, `${Math.round(largPorta)}`, "h", true);
+
+            // Número da porta dentro dela
+            const num = this._proj(px + largPorta / 2, oy + A / 2, oz + P - 4);
+            ctx.font = "bold 12px system-ui,Arial";
+            ctx.fillStyle = "rgba(255,255,255,0.85)";
+            ctx.fillText(`${pi + 1}`, num.x, num.y);
+          }
+        }
       }
 
       xCursor += vw;
@@ -631,7 +671,6 @@
     const cor = COR_COTA;
     const setaSize = pequena ? 4 : 6;
 
-    // Linha
     ctx.beginPath();
     ctx.moveTo(p1.x, p1.y);
     ctx.lineTo(p2.x, p2.y);
@@ -639,9 +678,9 @@
     ctx.lineWidth = pequena ? 1 : 1.5;
     ctx.stroke();
 
-    // Setas
     const ang = Math.atan2(p2.y - p1.y, p2.x - p1.x);
     ctx.fillStyle = cor;
+
     ctx.beginPath();
     ctx.moveTo(p1.x, p1.y);
     ctx.lineTo(p1.x + setaSize * Math.cos(ang - 0.4), p1.y + setaSize * Math.sin(ang - 0.4));
@@ -656,7 +695,6 @@
     ctx.closePath();
     ctx.fill();
 
-    // Texto (com fundo)
     const mx = (p1.x + p2.x) / 2;
     const my = (p1.y + p2.y) / 2;
     const fontSize = pequena ? 9 : 11;
@@ -666,31 +704,18 @@
 
     ctx.save();
     ctx.translate(mx, my);
-    if (orientacao === "v") {
-      ctx.rotate(-Math.PI / 2);
-    }
+    if (orientacao === "v") ctx.rotate(-Math.PI / 2);
     ctx.fillStyle = COR_COTA_TXT;
     ctx.fillRect(-txtW / 2, -txtH / 2, txtW, txtH);
+    ctx.strokeStyle = cor;
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(-txtW / 2, -txtH / 2, txtW, txtH);
     ctx.fillStyle = cor;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(label, 0, 0);
     ctx.restore();
   };
-
-  function TIPOS_VAO_NOME(tipo) {
-    const M = {
-      gaveta: "Gaveta",
-      gaveta_dupla: "Gaveta Dupla",
-      porta_tempero: "Porta Tempero",
-      lixeira: "Lixeira",
-      nicho: "Nicho",
-      porta_simples: "Porta",
-      porta_dupla: "Porta Dupla",
-      cristaleira: "Cristaleira"
-    };
-    return M[tipo] || tipo;
-  }
 
   /* =====================================================================
      LEGENDA
@@ -703,20 +728,12 @@
     el.innerHTML = `
       <span class="vl-item"><span class="lg-cor" style="background:${corP};border:1px solid #666"></span>Perfil ${escapeHtmlLocal(amb.corPerfil || "-")}</span>
       <span class="vl-item"><span class="lg-cor" style="background:${corV};border:1px solid #666"></span>Vidro ${escapeHtmlLocal(amb.corVidro || "-")}</span>
-      <span class="vl-item"><span class="lg-cor" style="background:#a855f7"></span>Prateleira</span>
+      <span class="vl-item"><span class="lg-cor" style="background:${COR_PRAT}"></span>Prateleira</span>
       <span class="vl-item"><span class="lg-cor" style="background:${COR_PUXADOR}"></span>Puxador</span>
+      <span class="vl-item"><span class="lg-cor" style="background:${COR_BASE_ACM}"></span>Base ACM</span>
       <span class="vl-item"><span class="lg-cor" style="background:${COR_COTA}"></span>Cotas</span>`;
   };
 
-  function escapeHtmlLocal(s) {
-    return String(s ?? "").replace(/[&<>"']/g, c => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-    }[c]));
-  }
-
-  /* =====================================================================
-     EXPORTA
-     ===================================================================== */
   global.viewer3D = new Viewer();
   global.CORES_VIEWER = { CORES_PERFIL_HEX, CORES_VIDRO_HEX };
 
