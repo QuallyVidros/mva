@@ -157,11 +157,12 @@
           <button data-cam="superior" title="Topo">⬆️ Topo</button>
           <button data-cam="lateral" title="Lateral">↔️ Lateral</button>
         </div>
-        <div class="ctrl-group" id="modeGroup">
-          <button data-mode="solido" class="on">🧊 Sólido</button>
-          <button data-mode="wireframe">📐 Wire</button>
-          <button data-mode="transp">🔮 Transp</button>
-        </div>
+	    <div class="ctrl-group" id="modeGroup">
+		  <button data-mode="solido" class="on">🧊 Sólido</button>
+		  <button data-mode="wireframe">📐 Wire</button>
+		  <button data-mode="transp">🔮 Transp</button>
+		  <button id="btnOpaco" onclick="viewer3D.toggleOpaco()">💧 Transparente</button>
+		</div>
         <div class="ctrl-group">
           <button onclick="viewer3D.reset()">🔄 Reset</button>
           <button id="btnAutoRotate" onclick="viewer3D.toggleAuto()">🌀 Auto</button>
