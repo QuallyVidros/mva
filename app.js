@@ -107,6 +107,12 @@ const COMP_DEFAULT = {
       { matId: "acm", qtdFormula: "1", descL: "0", descA: "0", rotulo: "Fundo",   orientacao: "LA" }
     ],
     acess: []
+    prateleiras: {
+      ativo: true, qtd: 2,
+      vidro:  { matId: "v_temperado", descL: 6, descA: 6 },
+      perfil: { matId: "p_montante", desc: 0, orientacao: "L" },
+      acess:  { matId: "a_suporte", porPrateleira: 2 }
+    }
   },
   porta_simples: {
     perfis: [
@@ -121,7 +127,7 @@ const COMP_DEFAULT = {
       { matId: "a_puxador",   qtdFormula: "1" }
     ],
     prateleiras: {
-      ativo: false, qtd: 2,
+      ativo: true, qtd: 2,
       vidro:  { matId: "v_temperado", descL: 6, descA: 6 },
       perfil: { matId: "p_montante", desc: 0, orientacao: "L" },
       acess:  { matId: "a_suporte", porPrateleira: 2 }
@@ -140,7 +146,7 @@ const COMP_DEFAULT = {
       { matId: "a_puxador",   qtdFormula: "2" }
     ],
     prateleiras: {
-      ativo: false, qtd: 2,
+      ativo: true, qtd: 2,
       vidro:  { matId: "v_temperado", descL: 6, descA: 6 },
       perfil: { matId: "p_montante", desc: 0, orientacao: "L" },
       acess:  { matId: "a_suporte", porPrateleira: 2 }
