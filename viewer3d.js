@@ -1,16 +1,16 @@
 /* =====================================================================
-   viewer3d.js — v9.5
-   Correções:
-   - Fundo do snapshot 100% BRANCO (destrói transparência)
-   - Auto-fit (zoom automático) para não cortar móveis grandes
-   - Bordas visíveis (contorno escuro em todas as faces)
-   - Perfis mais espessos visualmente
+   viewer3d.js — v10.0
+   Novidades:
+   - Botão Opaco (vidro 100% sólido com cor da paleta)
+   - Porta Dupla com divisória central e puxadores individuais
+   - Prateleiras em porta, porta dupla, porta tempero, nicho, cristaleira
+   - Auto-fit + fundo branco no PNG + cotas completas (v9.5 mantidas)
    ===================================================================== */
 
 (function (global) {
   "use strict";
 
-  // ===== PALETA =====
+  /* ===== PALETA ===== */
   const CORES_PERFIL_HEX = {
     "Bronze": "#a0522d", "Preto": "#1a1a1a", "Branco": "#e8e8e8",
     "Champanhe": "#d9cbb0", "Fosco": "#5a5a5a", "A definir": "#7c3aed"
@@ -65,7 +65,9 @@
     this.modo = "solido"; this.cotas = true; this.autoRotate = false;
     this.drag = null; this.ambIdx = 0; this.animFrame = null;
     this._getState = null; this._onSnapshot = null;
-    this.explosao = 0; this.explosaoAtiva = false; this.fundoBranco = false;
+    this.explosao = 0; this.explosaoAtiva = false;
+    this.fundoBranco = false;
+    this.vidroOpaco = false;   // ← NOVO
   }
 
   Viewer.prototype.init = function (opts) {
@@ -125,6 +127,7 @@
   Viewer.prototype.toggleAuto = function () { this.autoRotate = !this.autoRotate; document.getElementById("btnAutoRotate").classList.toggle("on", this.autoRotate); if (this.autoRotate) this._tick(); else cancelAnimationFrame(this.animFrame); };
   Viewer.prototype._tick = function () { if (!this.autoRotate) return; this.rotY += 0.01; this.render(); this.animFrame = requestAnimationFrame(() => this._tick()); };
   Viewer.prototype.toggleCotas = function () { this.cotas = !this.cotas; document.getElementById("btnCotas").classList.toggle("on", this.cotas); this.render(); };
+
   Viewer.prototype.toggleFundo = function () {
     this.fundoBranco = !this.fundoBranco;
     const btn = document.getElementById("btnFundo");
@@ -132,27 +135,32 @@
     this.canvas.style.background = this.fundoBranco ? "#ffffff" : "radial-gradient(circle at 30% 20%, #1a2743, #0a1526)";
     this.render();
   };
+
+  Viewer.prototype.toggleOpaco = function () {
+    this.vidroOpaco = !this.vidroOpaco;
+    const btn = document.getElementById("btnOpaco");
+    if (btn) {
+      btn.classList.toggle("on", this.vidroOpaco);
+      btn.textContent = this.vidroOpaco ? "💎 Opaco" : "💧 Transparente";
+    }
+    this.render();
+  };
+
   Viewer.prototype.toggleExplosao = function () { this.explosaoAtiva = !this.explosaoAtiva; this.explosao = this.explosaoAtiva ? 0.5 : 0; const btn = document.getElementById("btnExplosao"); if (btn) btn.classList.toggle("on", this.explosaoAtiva); const slider = document.getElementById("explosaoSlider"); if (slider) { slider.disabled = !this.explosaoAtiva; slider.value = this.explosao; } this.render(); };
   Viewer.prototype.setExplosao = function (v) { this.explosao = Math.max(0, Math.min(1, v)); this.explosaoAtiva = this.explosao > 0.001; const btn = document.getElementById("btnExplosao"); if (btn) btn.classList.toggle("on", this.explosaoAtiva); this.render(); };
 
-  // =====================================================================
-  // SNAPSHOT — FUNDO BRANCO GARANTIDO
-  // =====================================================================
   Viewer.prototype.snapshot = function (paraPrint) {
     if (!this.canvas) return;
     const fundoAntes = this.fundoBranco;
     this.fundoBranco = true;
     this.render();
-
-    // Força branco por baixo (corrige pixel ratio e transparência)
     const ctx = this.ctx;
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0); // reseta dpr
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalCompositeOperation = "destination-over";
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.restore();
-
     const dataURL = this.canvas.toDataURL("image/png", 1.0);
     this.fundoBranco = fundoAntes;
     this.render();
@@ -166,46 +174,36 @@
     }
   };
 
-  // =====================================================================
-  // AUTO-FIT (ZOOM AUTOMÁTICO)
-  // =====================================================================
   Viewer.prototype._autoFit = function (L, A, P) {
-    const W = this.canvas.clientWidth;
-    const H = this.canvas.clientHeight;
-    // Calcula a bounding box aproximada do móvel rotacionado
+    const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
     const cantos = [
       [-L/2, -A/2, -P/2], [L/2, -A/2, -P/2], [L/2, A/2, -P/2], [-L/2, A/2, -P/2],
       [-L/2, -A/2, P/2], [L/2, -A/2, P/2], [L/2, A/2, P/2], [-L/2, A/2, P/2]
     ];
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     cantos.forEach(c => {
-      let p = rotY(c, this.rotY);
-      p = rotX(p, this.rotX);
+      let p = rotY(c, this.rotY); p = rotX(p, this.rotX);
       const persp = 1400 / (1400 + p[2] * 0.6);
-      const px = p[0] * persp;
-      const py = p[1] * persp;
+      const px = p[0] * persp, py = p[1] * persp;
       if (px < minX) minX = px; if (px > maxX) maxX = px;
       if (py < minY) minY = py; if (py > maxY) maxY = py;
     });
-    const bboxW = maxX - minX;
-    const bboxH = maxY - minY;
-    // Margem de 15% (para as cotas caberem)
+    const bboxW = maxX - minX, bboxH = maxY - minY;
     const fitZoom = Math.min(W / bboxW, H / bboxH) * 0.85;
     this.zoom = Math.max(0.05, Math.min(2, fitZoom));
   };
 
   Viewer.prototype._proj = function (x, y, z) {
-    let p = rotY([x, y, z], this.rotY);
-    p = rotX(p, this.rotX);
+    let p = rotY([x, y, z], this.rotY); p = rotX(p, this.rotX);
     const zPersp = 1400 / (1400 + p[2] * 0.6);
     const cx = this.canvas.clientWidth / 2 + this.panX;
     const cy = this.canvas.clientHeight / 2 + this.panY;
     return { x: cx + p[0] * this.zoom * zPersp, y: cy + p[1] * this.zoom * zPersp, z: p[2] };
   };
 
-  // =====================================================================
-  // GERAR FACES
-  // =====================================================================
+  /* =========================================================
+     GERAR FACES
+     ========================================================= */
   Viewer.prototype._gerarFaces = function (amb) {
     const faces = [];
     const L = +amb.largura, A = +amb.altura, P = +amb.profundidade;
@@ -219,6 +217,7 @@
 
     const EXPL = this.explosao;
     const centro = [0, 0, 0];
+    const OPACO = this.vidroOpaco;
 
     function normal(pts) {
       const a = [pts[1][0]-pts[0][0], pts[1][1]-pts[0][1], pts[1][2]-pts[0][2]];
@@ -242,37 +241,38 @@
       const n = normal(ptsFinal);
       const shade = 0.75 + 0.25 * Math.max(0, n[1]);
       const corFinal = clarear(escurecer(cor, shade), 0.05);
+
+      // Se for vidro e estiver opaco, força alpha 1
+      const finalAlpha = (OPACO && (tipo === "vidro" || tipo === "gaveta")) ? 1.0 : alpha;
+
       const cx = (ptsFinal[0][0]+ptsFinal[1][0]+ptsFinal[2][0]+ptsFinal[3][0])/4;
       const cy = (ptsFinal[0][1]+ptsFinal[1][1]+ptsFinal[2][1]+ptsFinal[3][1])/4;
       const cz = (ptsFinal[0][2]+ptsFinal[1][2]+ptsFinal[2][2]+ptsFinal[3][2])/4;
-      faces.push({ pts: ptsFinal, cor, corFinal, alpha, tipo, shade, cx, cy, cz });
+      faces.push({ pts: ptsFinal, cor, corFinal, alpha: finalAlpha, tipo, shade, cx, cy, cz });
     }
 
     function addBox(x, y, z, dx, dy, dz, cor, alpha, tipoBox) {
       tipoBox = tipoBox || "perfil";
-      // Frente e fundo
       addFace([[x,y,z+dz],[x+dx,y,z+dz],[x+dx,y+dy,z+dz],[x,y+dy,z+dz]], cor, alpha, tipoBox);
       addFace([[x,y,z],[x+dx,y,z],[x+dx,y+dy,z],[x,y+dy,z]], cor, alpha, tipoBox);
-      // Esquerda e direita
       addFace([[x,y,z],[x,y,z+dz],[x,y+dy,z+dz],[x,y+dy,z]], cor, alpha, tipoBox);
       addFace([[x+dx,y,z],[x+dx,y,z+dz],[x+dx,y+dy,z+dz],[x+dx,y+dy,z]], cor, alpha, tipoBox);
-      // Topo e base
       addFace([[x,y+dy,z],[x+dx,y+dy,z],[x+dx,y+dy,z+dz],[x,y+dy,z+dz]], cor, alpha, tipoBox);
       addFace([[x,y,z],[x+dx,y,z],[x+dx,y,z+dz],[x,y,z+dz]], cor, alpha, tipoBox);
     }
 
-    // Painel frontal (vidro de fundo)
-    addFace([[ox,oy,oz+P],[ox+L,oy,oz+P],[ox+L,oy+A,oz+P],[ox,oy+A,oz+P]], corVidro, 0.15, "vidro");
+    // Painel frontal de fundo (vidro)
+    addFace([[ox,oy,oz+P],[ox+L,oy,oz+P],[ox+L,oy+A,oz+P],[ox,oy+A,oz+P]], corVidro, 0.12, "vidro");
     // Base ACM
     addFace([[ox,oy,oz],[ox+L,oy,oz],[ox+L,oy,oz+P],[ox,oy,oz+P]], COR_BASE_ACM, 0.95, "acm");
     // Topo perfil
     addFace([[ox,oy+A,oz],[ox+L,oy+A,oz],[ox+L,oy+A,oz+P],[ox,oy+A,oz+P]], corPerfil, 1, "perfil");
 
-    if (vis === "todos") addFace([[ox,oy,oz],[ox+L,oy,oz],[ox+L,oy+A,oz],[ox,oy+A,oz]], corVidro, 0.15, "vidro");
-    if (vis === "frente_1" || vis === "frente_2" || vis === "todos") addFace([[ox,oy,oz],[ox,oy,oz+P],[ox,oy+A,oz+P],[ox,oy+A,oz]], corVidro, 0.15, "vidro");
-    if (vis === "frente_2" || vis === "todos") addFace([[ox+L,oy,oz],[ox+L,oy,oz+P],[ox+L,oy+A,oz+P],[ox+L,oy+A,oz]], corVidro, 0.15, "vidro");
+    if (vis === "todos") addFace([[ox,oy,oz],[ox+L,oy,oz],[ox+L,oy+A,oz],[ox,oy+A,oz]], corVidro, 0.12, "vidro");
+    if (vis === "frente_1" || vis === "frente_2" || vis === "todos") addFace([[ox,oy,oz],[ox,oy,oz+P],[ox,oy+A,oz+P],[ox,oy+A,oz]], corVidro, 0.12, "vidro");
+    if (vis === "frente_2" || vis === "todos") addFace([[ox+L,oy,oz],[ox+L,oy,oz+P],[ox+L,oy+A,oz+P],[ox+L,oy+A,oz]], corVidro, 0.12, "vidro");
 
-    const esp = 20; // Perfil mais espesso (20mm)
+    const esp = 20;
     let xCursor = 0;
 
     (amb.vaos || []).forEach(v => {
@@ -280,7 +280,7 @@
       const vx = ox + xCursor;
       const vxEnd = vx + vw;
 
-      // Moldura
+      // Moldura externa do vão
       addBox(vx, oy, oz, esp, A, P, corPerfil, 1, "perfil");
       addBox(vxEnd - esp, oy, oz, esp, A, P, corPerfil, 1, "perfil");
       addBox(vx + esp, oy + A - esp, oz, vw - 2 * esp, esp, P, corPerfil, 1, "perfil");
@@ -296,18 +296,27 @@
         for (let gi = 0; gi < n; gi++) {
           const gy = oy + esp + gi * hG;
           addFace([[vx+esp, gy, oz+P-3],[vxEnd-esp, gy, oz+P-3],[vxEnd-esp, gy+hG, oz+P-3],[vx+esp, gy+hG, oz+P-3]], corVidro, 0.9, "gaveta");
-          // Borda escura da gaveta
           addBox(vx + esp, gy, oz + P - 4, vw - 2 * esp, 2, 2, escurecer(corPerfil, 0.7), 1, "perfil");
           if (gi < n - 1) addBox(vx + esp, gy + hG - 2, oz, vw - 2 * esp, 4, P, corPerfil, 1, "perfil");
         }
       } else if (isPorta) {
+        // Porta(s) dividida(s)
         const largPorta = (vw - 2 * esp - (nPortas - 1) * esp) / nPortas;
         for (let pi = 0; pi < nPortas; pi++) {
           const px = vx + esp + pi * (largPorta + esp);
-          addFace([[px, oy+esp, oz+P-3],[px+largPorta, oy+esp, oz+P-3],[px+largPorta, oy+A-esp, oz+P-3],[px, oy+A-esp, oz+P-3]], corVidro, 0.5, "vidro");
-          if (pi < nPortas - 1) addBox(px + largPorta, oy + esp, oz, esp, A - 2 * esp, P, corPerfil, 1, "perfil");
+          const alphaVidro = OPACO ? 1.0 : 0.5;
+          addFace([[px, oy+esp, oz+P-3],[px+largPorta, oy+esp, oz+P-3],[px+largPorta, oy+A-esp, oz+P-3],[px, oy+A-esp, oz+P-3]], corVidro, alphaVidro, "vidro");
+
+          // Divisória entre portas
+          if (pi < nPortas - 1) {
+            addBox(px + largPorta, oy + esp, oz, esp, A - 2 * esp, P, corPerfil, 1, "perfil");
+          }
+
+          // Puxador de cada porta
           addBox(px + largPorta - esp - 40, oy + A - esp - 30, oz + P - 8, 30, 6, 6, COR_PUXADOR, 1, "acessorio");
         }
+
+        // Prateleiras (para todos os tipos de porta)
         if (v.temPrateleiras && v.qtdPrateleiras > 0) {
           const nP = +v.qtdPrateleiras;
           for (let pi = 0; pi < nP; pi++) {
@@ -316,7 +325,7 @@
           }
         }
       } else if (v.tipo === "lixeira") {
-        addFace([[vx+esp, oy+esp, oz+P-3],[vxEnd-esp, oy+esp, oz+P-3],[vxEnd-esp, oy+A-esp, oz+P-3],[vx+esp, oy+A-esp, oz+P-3]], "#22c55e", 0.7, "vidro");
+        addFace([[vx+esp, oy+esp, oz+P-3],[vxEnd-esp, oy+esp, oz+P-3],[vxEnd-esp, oy+A-esp, oz+P-3],[vx+esp, oy+A-esp, oz+P-3]], "#22c55e", OPACO ? 1.0 : 0.7, "vidro");
       }
       xCursor += vw;
     });
@@ -324,9 +333,9 @@
     return { faces, L, A, P, ox, oy, oz, corPerfil, corVidro, corPerfilBorda, corVidroBorda, esp };
   };
 
-  // =====================================================================
-  // RENDER
-  // =====================================================================
+  /* =========================================================
+     RENDER
+     ========================================================= */
   Viewer.prototype.render = function () {
     if (!this.canvas || !this.ctx) return;
     const ctx = this.ctx;
@@ -355,14 +364,11 @@
       return;
     }
     if (msgEl) msgEl.style.display = "none";
-    if (hudEl) hudEl.textContent = `${amb.nome} · ${amb.largura}×${amb.altura}×${amb.profundidade}mm · ${this.modo}${this.cotas ? " · cotas" : ""}${this.fundoBranco ? " · studio" : ""}`;
+    if (hudEl) hudEl.textContent = `${amb.nome} · ${amb.largura}×${amb.altura}×${amb.profundidade}mm · ${this.modo}${this.cotas ? " · cotas" : ""}${this.fundoBranco ? " · studio" : ""}${this.vidroOpaco ? " · opaco" : ""}`;
 
-    // Aplica Auto-Fit para não cortar o móvel
     this._autoFit(+amb.largura, +amb.altura, +amb.profundidade);
-
     const dados = this._gerarFaces(amb);
 
-    // Sombra no chão
     if (this.modo !== "wireframe") this._desenharSombraChao(ctx, dados);
 
     const proj = dados.faces.map(f => {
@@ -384,9 +390,9 @@
       } else if (this.modo === "solido") {
         ctx.fillStyle = this._aplicarAlpha(face.corFinal, face.alpha);
         ctx.fill();
-        
-        // Reflexo no vidro
-        if (face.tipo === "vidro" || face.tipo === "gaveta") {
+
+        // Reflexo apenas se NÃO opaco
+        if (!this.vidroOpaco && (face.tipo === "vidro" || face.tipo === "gaveta")) {
           const p0 = screenPts[0], p2 = screenPts[2];
           const gradRefl = ctx.createLinearGradient(p0.x, p0.y, p2.x, p2.y);
           gradRefl.addColorStop(0.3, "rgba(255,255,255,0)");
@@ -395,7 +401,7 @@
           ctx.fillStyle = gradRefl; ctx.fill();
         }
 
-        // Contorno escuro para destacar as divisões
+        // Contorno
         let corBorda = (face.tipo === "vidro" || face.tipo === "gaveta") ? dados.corVidroBorda : (face.tipo === "prateleira" ? escurecer(COR_PRAT, 0.7) : dados.corPerfilBorda);
         ctx.strokeStyle = corBorda; ctx.lineWidth = 1.2; ctx.stroke();
       } else {
@@ -427,9 +433,9 @@
     return alpha >= 1 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${alpha})`;
   };
 
-  // =====================================================================
-  // COTAS
-  // =====================================================================
+  /* =========================================================
+     COTAS
+     ========================================================= */
   Viewer.prototype._desenharCotas = function (ctx, amb, dados) {
     const { L, A, P, ox, oy, oz, esp } = dados;
     ctx.save();
