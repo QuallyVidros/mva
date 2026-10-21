@@ -100,7 +100,7 @@
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   };
 
-  Viewer.prototype._bindEvents = function () {
+   Viewer.prototype._bindEvents = function () {
     const c = this.canvas;
     c.addEventListener("pointerdown", e => { this.drag = { x: e.clientX, y: e.clientY, rx: this.rotX, ry: this.rotY }; try { c.setPointerCapture(e.pointerId); } catch (_) {} });
     c.addEventListener("pointermove", e => {
@@ -117,8 +117,19 @@
     document.querySelectorAll("#cameraPresets button").forEach(b => {
       b.onclick = () => { const p = PRESETS[b.dataset.cam]; if (!p) return; this.rotX = p.rotX; this.rotY = p.rotY; this.zoom = p.zoom; this.panX = 0; this.panY = 0; document.querySelectorAll("#cameraPresets button").forEach(x => x.classList.remove("on")); b.classList.add("on"); this.render(); };
     });
+
     document.querySelectorAll("#modeGroup button").forEach(b => {
-      b.onclick = () => { this.modo = b.dataset.mode; document.querySelectorAll("#modeGroup button").forEach(x => x.classList.remove("on")); b.classList.add("on"); this.render(); };
+      // A MÁGICA AQUI: Ignora o botão Opaco para ele não quebrar o modo.
+      if (b.id === "btnOpaco") return; 
+      
+      b.onclick = () => { 
+        this.modo = b.dataset.mode; 
+        document.querySelectorAll("#modeGroup button").forEach(x => {
+          if (x.id !== "btnOpaco") x.classList.remove("on");
+        }); 
+        b.classList.add("on"); 
+        this.render(); 
+      };
     });
   };
 
@@ -135,16 +146,16 @@
     this.render();
   };
 
-     Viewer.prototype.toggleOpaco = function () {
+ Viewer.prototype.toggleOpaco = function () {
     this.vidroOpaco = !this.vidroOpaco;
     const btn = document.getElementById("btnOpaco");
     if (btn) {
       if (this.vidroOpaco) {
-        btn.classList.add("on");
         btn.innerHTML = "💎 Opaco";
+        btn.classList.add("on");
       } else {
-        btn.classList.remove("on");
         btn.innerHTML = "💧 Transparente";
+        btn.classList.remove("on");
       }
     }
     this.render();
@@ -323,7 +334,7 @@
     return { faces, L, A, P, ox, oy, oz, corPerfil, corVidro, corPerfilBorda, corVidroBorda, esp };
   };
 
-     Viewer.prototype.render = function () {
+       Viewer.prototype.render = function () {
     if (!this.canvas || !this.ctx) return;
     const ctx = this.ctx;
     const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
@@ -353,9 +364,8 @@
     if (msgEl) msgEl.style.display = "none";
     
     const opacoStr = this.vidroOpaco ? "💎 OPACO" : "💧 TRANSPARENTE";
-    if (hudEl) hudEl.textContent = `${amb.nome} · ${amb.largura}×${amb.altura}×${amb.profundidade}mm · ${this.modo.toUpperCase()} · VIDRO ${opacoStr}`;
+    if (hudEl) hudEl.textContent = `${amb.nome} · ${amb.largura}×${amb.altura}×${amb.profundidade}mm · ${(this.modo || 'solido').toUpperCase()} · VIDRO ${opacoStr}`;
 
-    // CHAMA O AUTOFIT CORRIGIDO
     this._autoFit(+amb.largura, +amb.altura, +amb.profundidade);
     
     const dados = this._gerarFaces(amb);
@@ -376,13 +386,13 @@
 
       const isVidro = (face.tipo === "vidro" || face.tipo === "gaveta");
       
-      // Lógica Opaco vs Transparente 100% garantida
-      let alpha = face.alpha;
+      // LÓGICA DEFINITIVA DE OPACIDADE
+      let alphaFinal = face.alpha || 1; 
       if (isVidro) {
         if (this.vidroOpaco) {
-          alpha = 1.0; // Opaco
+          alphaFinal = 1.0; // 100% SÓLIDO (fecha o cubo)
         } else {
-          alpha = 0.55; // Transparente visível
+          alphaFinal = 0.55; // Transparente normal
         }
       }
 
@@ -390,11 +400,16 @@
         let corLinha = isVidro ? escurecer(dados.corVidro, 0.5) : (face.tipo === "prateleira" ? COR_PRAT : dados.corPerfil);
         ctx.strokeStyle = corLinha; ctx.lineWidth = 1.5; ctx.stroke();
       } else {
-        // Aplica a cor
-        ctx.fillStyle = this._aplicarAlpha(face.corFinal, alpha);
+        // Se for sólido, não usa "rgba", usa a cor pura para garantir que não tenha transparência
+        if (alphaFinal >= 1.0) {
+          ctx.fillStyle = face.corFinal; 
+        } else {
+          ctx.fillStyle = this._aplicarAlpha(face.corFinal, alphaFinal);
+        }
+        
         ctx.fill();
 
-        // Reflexo (só se não for opaco e não estiver no modo transp)
+        // Reflexo (só se não for opaco)
         if (!this.vidroOpaco && isVidro && this.modo !== "transp") {
           const p0 = screenPts[0], p2 = screenPts[2];
           const gradRefl = ctx.createLinearGradient(p0.x, p0.y, p2.x, p2.y);
