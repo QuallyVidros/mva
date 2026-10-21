@@ -108,7 +108,7 @@ const COMP_DEFAULT = {
     ],
     acess: []
     prateleiras: {
-      ativo: true, qtd: 2,
+      ativo: false, qtd: 2,
       vidro:  { matId: "v_temperado", descL: 6, descA: 6 },
       perfil: { matId: "p_montante", desc: 0, orientacao: "L" },
       acess:  { matId: "a_suporte", porPrateleira: 2 }
@@ -127,7 +127,7 @@ const COMP_DEFAULT = {
       { matId: "a_puxador",   qtdFormula: "1" }
     ],
     prateleiras: {
-      ativo: true, qtd: 2,
+      ativo: false, qtd: 2,
       vidro:  { matId: "v_temperado", descL: 6, descA: 6 },
       perfil: { matId: "p_montante", desc: 0, orientacao: "L" },
       acess:  { matId: "a_suporte", porPrateleira: 2 }
@@ -146,7 +146,7 @@ const COMP_DEFAULT = {
       { matId: "a_puxador",   qtdFormula: "2" }
     ],
     prateleiras: {
-      ativo: true, qtd: 2,
+      ativo: false, qtd: 2,
       vidro:  { matId: "v_temperado", descL: 6, descA: 6 },
       perfil: { matId: "p_montante", desc: 0, orientacao: "L" },
       acess:  { matId: "a_suporte", porPrateleira: 2 }
