@@ -1,12 +1,69 @@
 /* =====================================================================
-   viewer3d.js — Visualização 3D isométrica do móvel montado
-   Corrigido em v6.1: ordem de desenho (painter's algorithm por z real),
-   presets de câmera e organização em faces por ambiente.
+   viewer3d.js — v8.0
+   Visualização 3D isométrica com:
+   - Cotas completas (L, A, P + largura de vão + altura de gaveta)
+   - Cores personalizadas (perfil usa cor real, vidro usa cor real)
+   - Modos: sólido, wireframe, transparente
+   - Explosão 3D
+   - Rotação e zoom por mouse/toque
    ===================================================================== */
 
-(function(global){
+(function (global) {
   "use strict";
 
+  /* =====================================================================
+     PALETA DE CORES
+     ===================================================================== */
+  const CORES_PERFIL_HEX = {
+    "Bronze":    "#a0522d",
+    "Preto":     "#1a1a1a",
+    "Branco":    "#e8e8e8",
+    "Champanhe": "#d9cbb0",
+    "Fosco":     "#5a5a5a",
+    "A definir": "#7c3aed"
+  };
+
+  const CORES_VIDRO_HEX = {
+    "Incolor":    "#cfeaff",
+    "Preto":      "#2a2a2a",
+    "Branco":     "#f0f0f0",
+    "Champanhe":  "#e0d5bc",
+    "Cinza":      "#8a8a8a",
+    "Bege":       "#e7d9be",
+    "A definir":  "#9bb5cc"
+  };
+
+  const COR_ESTRUTURA = "#475569";
+  const COR_PUXADOR   = "#c0c8d4";
+  const COR_COTA      = "#fbbf24";
+  const COR_COTA_TXT  = "#0b1220";
+
+  function corDoPerfil(cor) {
+    return CORES_PERFIL_HEX[cor] || "#64748b";
+  }
+  function corDoVidro(cor) {
+    return CORES_VIDRO_HEX[cor] || "#cfeaff";
+  }
+  function escurecer(hex, fator) {
+    // fator < 1 = escurece, > 1 = clareia
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const r2 = Math.max(0, Math.min(255, Math.round(r * fator)));
+    const g2 = Math.max(0, Math.min(255, Math.round(g * fator)));
+    const b2 = Math.max(0, Math.min(255, Math.round(b * fator)));
+    return "#" + [r2, g2, b2].map(v => v.toString(16).padStart(2, "0")).join("");
+  }
+  function hexParaRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
+  /* =====================================================================
+     PRESETS DE CÂMERA
+     ===================================================================== */
   const PRESETS = {
     frontal:  { rotX: 0.05,  rotY: 0.05,  zoom: 1.0 },
     iso:      { rotX: -0.35, rotY: 0.55,  zoom: 1.0 },
@@ -14,30 +71,22 @@
     lateral:  { rotX: 0.05,  rotY: 1.2,   zoom: 1.0 }
   };
 
-  const CORES = {
-    estrutura: "#334155",
-    vidro:     "#0ea5e9",
-    acm:       "#64748b",
-    prat:      "#a855f7",
-    pratBorda: "#7e22ce",
-    puxador:   "#e2e8f0",
-    perfil:    "#64748b"
-  };
-
-  function corDoPerfil(cor){
-    const map = {
-      "Bronze":"#a0522d", "Preto":"#1a1a1a", "Branco":"#e5e7eb",
-      "Champanhe":"#d9cbb0", "Fosco":"#4b5563", "A definir":"#7c3aed"
-    };
-    return map[cor] || "#64748b";
+  /* =====================================================================
+     MATEMÁTICA 3D
+     ===================================================================== */
+  function rotY(p, a) {
+    const c = Math.cos(a), s = Math.sin(a);
+    return [p[0] * c + p[2] * s, p[1], -p[0] * s + p[2] * c];
+  }
+  function rotX(p, a) {
+    const c = Math.cos(a), s = Math.sin(a);
+    return [p[0], p[1] * c - p[2] * s, p[1] * s + p[2] * c];
   }
 
-  // ====== Vetor 3D helpers ======
-  function rotY(p, a){ const c = Math.cos(a), s = Math.sin(a); return [p[0]*c + p[2]*s, p[1], -p[0]*s + p[2]*c]; }
-  function rotX(p, a){ const c = Math.cos(a), s = Math.sin(a); return [p[0], p[1]*c - p[2]*s, p[1]*s + p[2]*c]; }
-
-  // ====== Viewer ======
-  function Viewer(){
+  /* =====================================================================
+     VIEWER
+     ===================================================================== */
+  function Viewer() {
     this.canvas = null;
     this.ctx = null;
     this.rotX = PRESETS.iso.rotX;
@@ -46,21 +95,22 @@
     this.panX = 0;
     this.panY = 0;
     this.modo = "solido";
-    this.cotas = false;
+    this.cotas = true;
     this.autoRotate = false;
     this.drag = null;
     this.ambIdx = 0;
     this.animFrame = null;
-    this._getState = null;   // função injetada por app.js
+    this._getState = null;
     this._onSnapshot = null;
-	    // Explosão
-    this.explosao = 0;        // 0..1
+
+    // Explosão
+    this.explosao = 0;
     this.explosaoAtiva = false;
   }
 
-  Viewer.prototype.init = function(opts){
+  Viewer.prototype.init = function (opts) {
     this.canvas = document.getElementById("viewer3D");
-    if(!this.canvas) return;
+    if (!this.canvas) return;
     this.ctx = this.canvas.getContext("2d");
     this._getState = opts.getState;
     this._onSnapshot = opts.onSnapshot || null;
@@ -70,21 +120,26 @@
     this.render();
   };
 
-  Viewer.prototype._buildAmbTabs = function(){
+  Viewer.prototype._buildAmbTabs = function () {
     const tabs = document.getElementById("viewerAmbTabs");
-    if(!tabs) return;
+    if (!tabs) return;
     const state = this._getState();
-    if(!state.ambientes.length){ tabs.innerHTML = ""; return; }
+    if (!state.ambientes.length) { tabs.innerHTML = ""; return; }
+    if (this.ambIdx >= state.ambientes.length) this.ambIdx = 0;
     tabs.innerHTML = state.ambientes.map((a, i) =>
-      `<div class="tab ${i===this.ambIdx?"on":""}" data-idx="${i}">🏠 ${a.nome||"Amb "+i}</div>`
+      `<div class="tab ${i === this.ambIdx ? "on" : ""}" data-idx="${i}">🏠 ${a.nome || "Amb " + i}</div>`
     ).join("");
-    tabs.querySelectorAll(".tab").forEach(t=>{
-      t.onclick = () => { this.ambIdx = +t.dataset.idx; this._buildAmbTabs(); this.render(); };
+    tabs.querySelectorAll(".tab").forEach(t => {
+      t.onclick = () => {
+        this.ambIdx = +t.dataset.idx;
+        this._buildAmbTabs();
+        this.render();
+      };
     });
   };
 
-  Viewer.prototype.resize = function(){
-    if(!this.canvas) return;
+  Viewer.prototype.resize = function () {
+    if (!this.canvas) return;
     const rect = this.canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     this.canvas.width = rect.width * dpr;
@@ -92,92 +147,104 @@
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   };
 
-  Viewer.prototype._bindEvents = function(){
+  Viewer.prototype._bindEvents = function () {
     const c = this.canvas;
-    c.addEventListener("pointerdown", e=>{ this.drag = { x:e.clientX, y:e.clientY, rx:this.rotX, ry:this.rotY }; try{ c.setPointerCapture(e.pointerId); }catch(_){} });
-    c.addEventListener("pointermove", e=>{
-      if(!this.drag) return;
+    c.addEventListener("pointerdown", e => {
+      this.drag = { x: e.clientX, y: e.clientY, rx: this.rotX, ry: this.rotY };
+      try { c.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+    c.addEventListener("pointermove", e => {
+      if (!this.drag) return;
       const dx = e.clientX - this.drag.x, dy = e.clientY - this.drag.y;
       this.rotY = this.drag.ry + dx * 0.008;
       this.rotX = Math.max(-1.5, Math.min(1.5, this.drag.rx + dy * 0.008));
       this.render();
     });
-    c.addEventListener("pointerup", e=>{ this.drag = null; try{ c.releasePointerCapture(e.pointerId); }catch(_){} });
-    c.addEventListener("wheel", e=>{ e.preventDefault(); this.zoom = Math.max(0.25, Math.min(3, this.zoom * (e.deltaY<0?1.1:0.9))); this.render(); }, { passive:false });
-    window.addEventListener("resize", ()=>{ this.resize(); this.render(); });
+    c.addEventListener("pointerup", e => {
+      this.drag = null;
+      try { c.releasePointerCapture(e.pointerId); } catch (_) {}
+    });
+    c.addEventListener("wheel", e => {
+      e.preventDefault();
+      this.zoom = Math.max(0.25, Math.min(3, this.zoom * (e.deltaY < 0 ? 1.1 : 0.9)));
+      this.render();
+    }, { passive: false });
+    window.addEventListener("resize", () => { this.resize(); this.render(); });
 
-    // presets de câmera
-    document.querySelectorAll("#cameraPresets button").forEach(b=>{
+    // Presets
+    document.querySelectorAll("#cameraPresets button").forEach(b => {
       b.onclick = () => {
         const p = PRESETS[b.dataset.cam];
-        if(!p) return;
-        this.rotX = p.rotX; this.rotY = p.rotY; this.zoom = p.zoom; this.panX = 0; this.panY = 0;
-        document.querySelectorAll("#cameraPresets button").forEach(x=>x.classList.remove("on"));
+        if (!p) return;
+        this.rotX = p.rotX; this.rotY = p.rotY; this.zoom = p.zoom;
+        this.panX = 0; this.panY = 0;
+        document.querySelectorAll("#cameraPresets button").forEach(x => x.classList.remove("on"));
         b.classList.add("on");
         this.render();
       };
     });
 
-    // modos
-    document.querySelectorAll("#modeGroup button").forEach(b=>{
+    // Modos
+    document.querySelectorAll("#modeGroup button").forEach(b => {
       b.onclick = () => {
         this.modo = b.dataset.mode;
-        document.querySelectorAll("#modeGroup button").forEach(x=>x.classList.remove("on"));
+        document.querySelectorAll("#modeGroup button").forEach(x => x.classList.remove("on"));
         b.classList.add("on");
         this.render();
       };
     });
   };
 
-  Viewer.prototype.reset = function(){
+  Viewer.prototype.reset = function () {
     const p = PRESETS.iso;
-    this.rotX = p.rotX; this.rotY = p.rotY; this.zoom = p.zoom; this.panX = 0; this.panY = 0;
+    this.rotX = p.rotX; this.rotY = p.rotY; this.zoom = p.zoom;
+    this.panX = 0; this.panY = 0;
     this.render();
   };
 
-  Viewer.prototype.toggleAuto = function(){
+  Viewer.prototype.toggleAuto = function () {
     this.autoRotate = !this.autoRotate;
     document.getElementById("btnAutoRotate").classList.toggle("on", this.autoRotate);
-    if(this.autoRotate) this._tick(); else cancelAnimationFrame(this.animFrame);
+    if (this.autoRotate) this._tick();
+    else cancelAnimationFrame(this.animFrame);
   };
-  Viewer.prototype._tick = function(){
-    if(!this.autoRotate) return;
+  Viewer.prototype._tick = function () {
+    if (!this.autoRotate) return;
     this.rotY += 0.01;
     this.render();
-    this.animFrame = requestAnimationFrame(()=>this._tick());
+    this.animFrame = requestAnimationFrame(() => this._tick());
   };
 
-  Viewer.prototype.toggleCotas = function(){
+  Viewer.prototype.toggleCotas = function () {
     this.cotas = !this.cotas;
     document.getElementById("btnCotas").classList.toggle("on", this.cotas);
     this.render();
   };
-    // ====== EXPLOSÃO ======
-  Viewer.prototype.toggleExplosao = function(){
+
+  Viewer.prototype.toggleExplosao = function () {
     this.explosaoAtiva = !this.explosaoAtiva;
     this.explosao = this.explosaoAtiva ? 0.5 : 0;
     const btn = document.getElementById("btnExplosao");
-    if(btn) btn.classList.toggle("on", this.explosaoAtiva);
+    if (btn) btn.classList.toggle("on", this.explosaoAtiva);
     const slider = document.getElementById("explosaoSlider");
-    if(slider) slider.disabled = !this.explosaoAtiva;
-    if(slider) slider.value = this.explosao;
+    if (slider) { slider.disabled = !this.explosaoAtiva; slider.value = this.explosao; }
     this.render();
   };
 
-  Viewer.prototype.setExplosao = function(v){
+  Viewer.prototype.setExplosao = function (v) {
     this.explosao = Math.max(0, Math.min(1, v));
     this.explosaoAtiva = this.explosao > 0.001;
     const btn = document.getElementById("btnExplosao");
-    if(btn) btn.classList.toggle("on", this.explosaoAtiva);
+    if (btn) btn.classList.toggle("on", this.explosaoAtiva);
     this.render();
   };
 
-  Viewer.prototype.snapshot = function(paraPrint){
-    if(!this.canvas) return;
+  Viewer.prototype.snapshot = function (paraPrint) {
+    if (!this.canvas) return;
     const dataURL = this.canvas.toDataURL("image/png");
     const el = document.getElementById("viewerSnapshot");
-    if(!el) return;
-    if(paraPrint){
+    if (!el) return;
+    if (paraPrint) {
       el.innerHTML = `<img src="${dataURL}" style="width:100%;max-width:780px;border-radius:8px;border:1px solid #999">`;
       el.style.display = "block";
       return;
@@ -186,16 +253,15 @@
     a.href = dataURL;
     a.download = `visualizacao-${Date.now()}.png`;
     a.click();
-    if(this._onSnapshot) this._onSnapshot("PNG baixado");
+    if (this._onSnapshot) this._onSnapshot("📸 PNG baixado");
   };
 
-  // ====== PROJEÇÃO ======
-  // Aplica rotação e retorna coordenada de tela + profundidade
-  Viewer.prototype._proj = function(x, y, z){
-    // rotação
+  /* =====================================================================
+     PROJEÇÃO 3D → 2D
+     ===================================================================== */
+  Viewer.prototype._proj = function (x, y, z) {
     let p = rotY([x, y, z], this.rotY);
     p = rotX(p, this.rotX);
-    // perspectiva
     const focal = 1400;
     const zPersp = focal / (focal + p[2] * 0.6);
     const cx = this.canvas.clientWidth / 2 + this.panX;
@@ -207,138 +273,186 @@
     };
   };
 
-  // ====== GERAR FACES ======
-  Viewer.prototype._gerarFaces = function(amb){
+  /* =====================================================================
+     GERAR FACES 3D
+     ===================================================================== */
+  Viewer.prototype._gerarFaces = function (amb) {
     const faces = [];
     const L = +amb.largura, A = +amb.altura, P = +amb.profundidade;
-    const ox = -L/2, oy = -A/2, oz = -P/2; // centraliza
+    const ox = -L / 2, oy = -A / 2, oz = -P / 2;
     const vis = amb.visibilidade || "frente";
 
-	   // ====== EXPLOSÃO: fator global ======
-	const EXPL = this.explosao;   // 0..1
-	const centro = [0, 0, 0];     // centro do ambiente
+    // Cores personalizadas
+    const corPerfil = corDoPerfil(amb.corPerfil);
+    const corVidro = corDoVidro(amb.corVidro);
+    const corPerfilBorda = escurecer(corPerfil, 0.6);
+    const corVidroBorda = escurecer(corVidro, 0.7);
 
-	// helper: adiciona face retangular (4 pontos 3D) com deslocamento de explosão
-	function addFace(pts, cor, alpha, tipo){
-	  let ptsFinal = pts;
-	  if(EXPL > 0.001){
-		const cx = (pts[0][0]+pts[1][0]+pts[2][0]+pts[3][0])/4;
-		const cy = (pts[0][1]+pts[1][1]+pts[2][1]+pts[3][1])/4;
-		const cz = (pts[0][2]+pts[1][2]+pts[2][2]+pts[3][2])/4;
-		const dx = cx - centro[0];
-		const dy = cy - centro[1];
-		const dz = cz - centro[2];
-		const len = Math.hypot(dx, dy, dz) || 1;
-		const fator = EXPL * 600;
-		const ox2 = (dx / len) * fator;
-		const oy2 = (dy / len) * fator;
-		const oz2 = (dz / len) * fator;
-		ptsFinal = pts.map(p => [p[0] + ox2, p[1] + oy2, p[2] + oz2]);
-	  }
-	  const n = normal(ptsFinal);
-	  const shade = 0.7 + 0.3 * Math.max(0, n[1]);
-	  const cx = (ptsFinal[0][0]+ptsFinal[1][0]+ptsFinal[2][0]+ptsFinal[3][0])/4;
-	  const cy = (ptsFinal[0][1]+ptsFinal[1][1]+ptsFinal[2][1]+ptsFinal[3][1])/4;
-	  const cz = (ptsFinal[0][2]+ptsFinal[1][2]+ptsFinal[2][2]+ptsFinal[3][2])/4;
-	  faces.push({ pts: ptsFinal, cor, alpha, tipo, shade, cx, cy, cz });
-	}
+    const EXPL = this.explosao;
+    const centro = [0, 0, 0];
 
-    function normal(pts){
-      const a = [pts[1][0]-pts[0][0], pts[1][1]-pts[0][1], pts[1][2]-pts[0][2]];
-      const b = [pts[2][0]-pts[0][0], pts[2][1]-pts[0][1], pts[2][2]-pts[0][2]];
-      const n = [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
-      const len = Math.hypot(n[0],n[1],n[2]) || 1;
-      return [n[0]/len, n[1]/len, n[2]/len];
+    function normal(pts) {
+      const a = [pts[1][0] - pts[0][0], pts[1][1] - pts[0][1], pts[1][2] - pts[0][2]];
+      const b = [pts[2][0] - pts[0][0], pts[2][1] - pts[0][1], pts[2][2] - pts[0][2]];
+      const n = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+      const len = Math.hypot(n[0], n[1], n[2]) || 1;
+      return [n[0] / len, n[1] / len, n[2] / len];
     }
 
-    // ====== ESTRUTURA (paredes) ======
-    // Frente (sempre)
-    addFace([[ox,oy,oz+P],[ox+L,oy,oz+P],[ox+L,oy+A,oz+P],[ox,oy+A,oz+P]], CORES.vidro, 0.18, "vidro-frente");
-    // Base
-    addFace([[ox,oy,oz],[ox+L,oy,oz],[ox+L,oy,oz+P],[ox,oy,oz+P]], CORES.acm, 0.9, "acm-base");
+    function addFace(pts, cor, alpha, tipo) {
+      let ptsFinal = pts;
+      if (EXPL > 0.001) {
+        const cx = (pts[0][0] + pts[1][0] + pts[2][0] + pts[3][0]) / 4;
+        const cy = (pts[0][1] + pts[1][1] + pts[2][1] + pts[3][1]) / 4;
+        const cz = (pts[0][2] + pts[1][2] + pts[2][2] + pts[3][2]) / 4;
+        const dx = cx - centro[0], dy = cy - centro[1], dz = cz - centro[2];
+        const len = Math.hypot(dx, dy, dz) || 1;
+        const fator = EXPL * 600;
+        ptsFinal = pts.map(p => [
+          p[0] + (dx / len) * fator,
+          p[1] + (dy / len) * fator,
+          p[2] + (dz / len) * fator
+        ]);
+      }
+      const n = normal(ptsFinal);
+      const shade = 0.75 + 0.25 * Math.max(0, n[1]);
+      const cx = (ptsFinal[0][0] + ptsFinal[1][0] + ptsFinal[2][0] + ptsFinal[3][0]) / 4;
+      const cy = (ptsFinal[0][1] + ptsFinal[1][1] + ptsFinal[2][1] + ptsFinal[3][1]) / 4;
+      const cz = (ptsFinal[0][2] + ptsFinal[1][2] + ptsFinal[2][2] + ptsFinal[3][2]) / 4;
+      faces.push({ pts: ptsFinal, cor, alpha, tipo, shade, cx, cy, cz });
+    }
+
+    function addBox(x, y, z, dx, dy, dz, cor, alpha, tipoBox) {
+      tipoBox = tipoBox || "estrutura";
+      // frente
+      addFace([[x, y, z + dz], [x + dx, y, z + dz], [x + dx, y + dy, z + dz], [x, y + dy, z + dz]], cor, alpha, tipoBox);
+      // fundo
+      addFace([[x, y, z], [x + dx, y, z], [x + dx, y + dy, z], [x, y + dy, z]], cor, alpha, tipoBox);
+      // esquerda
+      addFace([[x, y, z], [x, y, z + dz], [x, y + dy, z + dz], [x, y + dy, z]], cor, alpha, tipoBox);
+      // direita
+      addFace([[x + dx, y, z], [x + dx, y, z + dz], [x + dx, y + dy, z + dz], [x + dx, y + dy, z]], cor, alpha, tipoBox);
+      // topo
+      addFace([[x, y + dy, z], [x + dx, y + dy, z], [x + dx, y + dy, z + dz], [x, y + dy, z + dz]], cor, alpha, tipoBox);
+      // base
+      addFace([[x, y, z], [x + dx, y, z], [x + dx, y, z + dz], [x, y, z + dz]], cor, alpha, tipoBox);
+    }
+
+    // ===== Painel frontal (vidro) =====
+    addFace(
+      [[ox, oy, oz + P], [ox + L, oy, oz + P], [ox + L, oy + A, oz + P], [ox, oy + A, oz + P]],
+      corVidro, 0.3, "vidro"
+    );
+    // Base (ACM)
+    addFace(
+      [[ox, oy, oz], [ox + L, oy, oz], [ox + L, oy, oz + P], [ox, oy, oz + P]],
+      "#5c4033", 0.85, "acm"
+    );
     // Topo (borda fina)
-    addFace([[ox,oy+A,oz],[ox+L,oy+A,oz],[ox+L,oy+A,oz+P],[ox,oy+A,oz+P]], CORES.estrutura, 0.55, "topo");
+    addFace(
+      [[ox, oy + A, oz], [ox + L, oy + A, oz], [ox + L, oy + A, oz + P], [ox, oy + A, oz + P]],
+      corPerfil, 0.95, "estrutura"
+    );
     // Fundo
-    if(vis === "todos") addFace([[ox,oy,oz],[ox+L,oy,oz],[ox+L,oy+A,oz],[ox,oy+A,oz]], CORES.vidro, 0.18, "vidro-fundo");
+    if (vis === "todos") {
+      addFace(
+        [[ox, oy, oz], [ox + L, oy, oz], [ox + L, oy + A, oz], [ox, oy + A, oz]],
+        corVidro, 0.2, "vidro"
+      );
+    }
     // Lateral esquerda
-    if(vis === "frente_1" || vis === "frente_2" || vis === "todos"){
-      addFace([[ox,oy,oz],[ox,oy,oz+P],[ox,oy+A,oz+P],[ox,oy+A,oz]], CORES.vidro, 0.18, "vidro-lat");
+    if (vis === "frente_1" || vis === "frente_2" || vis === "todos") {
+      addFace(
+        [[ox, oy, oz], [ox, oy, oz + P], [ox, oy + A, oz + P], [ox, oy + A, oz]],
+        corVidro, 0.2, "vidro"
+      );
     }
     // Lateral direita
-    if(vis === "frente_2" || vis === "todos"){
-      addFace([[ox+L,oy,oz],[ox+L,oy,oz+P],[ox+L,oy+A,oz+P],[ox+L,oy+A,oz]], CORES.vidro, 0.18, "vidro-lat");
+    if (vis === "frente_2" || vis === "todos") {
+      addFace(
+        [[ox + L, oy, oz], [ox + L, oy, oz + P], [ox + L, oy + A, oz + P], [ox + L, oy + A, oz]],
+        corVidro, 0.2, "vidro"
+      );
     }
 
-    // ====== VÃOS ======
+    // ===== Vãos =====
+    const esp = 18;
     let xCursor = 0;
-    (amb.vaos||[]).forEach(v=>{
+
+    (amb.vaos || []).forEach(v => {
       const vw = +v.largura;
       const vx = ox + xCursor;
       const vxEnd = vx + vw;
-      const corP = corDoPerfil(v.corPerfil);
-      const esp = 18; // espessura do perfil
-
-      // Helper: adiciona caixa 3D (6 faces)
-      function addBox(x, y, z, dx, dy, dz, cor, alpha){
-        // frente
-        addFace([[x,y,z+dz],[x+dx,y,z+dz],[x+dx,y+dy,z+dz],[x,y+dy,z+dz]], cor, alpha, "box");
-        // fundo
-        addFace([[x,y,z],[x+dx,y,z],[x+dx,y+dy,z],[x,y+dy,z]], cor, alpha, "box");
-        // esq
-        addFace([[x,y,z],[x,y,z+dz],[x,y+dy,z+dz],[x,y+dy,z]], cor, alpha, "box");
-        // dir
-        addFace([[x+dx,y,z],[x+dx,y,z+dz],[x+dx,y+dy,z+dz],[x+dx,y+dy,z]], cor, alpha, "box");
-        // topo
-        addFace([[x,y+dy,z],[x+dx,y+dy,z],[x+dx,y+dy,z+dz],[x,y+dy,z+dz]], cor, alpha, "box");
-        // base
-        addFace([[x,y,z],[x+dx,y,z],[x+dx,y,z+dz],[x,y,z+dz]], cor, alpha, "box");
-      }
 
       // Moldura do vão
-      addBox(vx, oy, oz, esp, A, P, corP, 1);              // montante esq
-      addBox(vxEnd - esp, oy, oz, esp, A, P, corP, 1);      // montante dir
-      addBox(vx + esp, oy + A - esp, oz, vw - 2*esp, esp, P, corP, 1); // travessa topo
-      addBox(vx + esp, oy, oz, vw - 2*esp, esp, P, corP, 1);           // travessa base
+      addBox(vx, oy, oz, esp, A, P, corPerfil, 1, "perfil");
+      addBox(vxEnd - esp, oy, oz, esp, A, P, corPerfil, 1, "perfil");
+      addBox(vx + esp, oy + A - esp, oz, vw - 2 * esp, esp, P, corPerfil, 1, "perfil");
+      addBox(vx + esp, oy, oz, vw - 2 * esp, esp, P, corPerfil, 1, "perfil");
 
-      // Conteúdo
       const nGavetas = v.gavetasPortas || 1;
-      if(v.tipo === "gaveta" || v.tipo === "gaveta_dupla"){
+
+      if (v.tipo === "gaveta" || v.tipo === "gaveta_dupla") {
         const n = v.tipo === "gaveta_dupla" ? nGavetas * 2 : nGavetas;
-        const hG = (A - 2*esp) / n;
-        for(let gi = 0; gi < n; gi++){
+        const hG = (A - 2 * esp) / n;
+        for (let gi = 0; gi < n; gi++) {
           const gy = oy + esp + gi * hG;
-          // frente de vidro translúcido da gaveta
-          addFace([[vx+esp+2, gy+2, oz+P-3],[vxEnd-esp-2, gy+2, oz+P-3],[vxEnd-esp-2, gy+hG-2, oz+P-3],[vx+esp+2, gy+hG-2, oz+P-3]], CORES.vidro, 0.45, "gaveta");
-          // divisória entre gavetas
-          addBox(vx+esp, gy, oz, vw - 2*esp, 2, P, corP, 1);
+          // frente da gaveta (vidro)
+          addFace(
+            [[vx + esp + 2, gy + 2, oz + P - 3], [vxEnd - esp - 2, gy + 2, oz + P - 3],
+             [vxEnd - esp - 2, gy + hG - 2, oz + P - 3], [vx + esp + 2, gy + hG - 2, oz + P - 3]],
+            corVidro, 0.4, "vidro"
+          );
+          // divisória entre gavetas (perfil)
+          if (gi < n - 1) {
+            addBox(vx + esp, gy + hG - 2, oz, vw - 2 * esp, 4, P, corPerfil, 1, "perfil");
+          }
         }
-      } else if(["porta_simples","porta_dupla","porta_tempero","cristaleira","nicho"].includes(v.tipo)){
+      } else if (["porta_simples", "porta_dupla", "porta_tempero", "cristaleira", "nicho"].includes(v.tipo)) {
         // porta de vidro
-        addFace([[vx+esp, oy+esp, oz+P-3],[vxEnd-esp, oy+esp, oz+P-3],[vxEnd-esp, oy+A-esp, oz+P-3],[vx+esp, oy+A-esp, oz+P-3]], CORES.vidro, 0.5, "porta");
+        addFace(
+          [[vx + esp, oy + esp, oz + P - 3], [vxEnd - esp, oy + esp, oz + P - 3],
+           [vxEnd - esp, oy + A - esp, oz + P - 3], [vx + esp, oy + A - esp, oz + P - 3]],
+          corVidro, 0.45, "vidro"
+        );
         // prateleiras
-        if(v.temPrateleiras && v.qtdPrateleiras > 0){
+        if (v.temPrateleiras && v.qtdPrateleiras > 0) {
           const nP = +v.qtdPrateleiras;
-          for(let pi = 0; pi < nP; pi++){
-            const py = oy + esp + (A - 2*esp) * (pi+1) / (nP+1);
-            addFace([[vx+esp, py-2, oz+esp],[vxEnd-esp, py-2, oz+esp],[vxEnd-esp, py-2, oz+P-esp],[vx+esp, py-2, oz+P-esp]], CORES.prat, 0.85, "prat");
-            addFace([[vx+esp, py+2, oz+esp],[vxEnd-esp, py+2, oz+esp],[vxEnd-esp, py+2, oz+P-esp],[vx+esp, py+2, oz+P-esp]], CORES.pratBorda, 0.85, "prat");
+          for (let pi = 0; pi < nP; pi++) {
+            const py = oy + esp + (A - 2 * esp) * (pi + 1) / (nP + 1);
+            addFace(
+              [[vx + esp, py - 2, oz + esp], [vxEnd - esp, py - 2, oz + esp],
+               [vxEnd - esp, py - 2, oz + P - esp], [vx + esp, py - 2, oz + P - esp]],
+              "#a855f7", 0.75, "prateleira"
+            );
+            addFace(
+              [[vx + esp, py + 2, oz + esp], [vxEnd - esp, py + 2, oz + esp],
+               [vxEnd - esp, py + 2, oz + P - esp], [vx + esp, py + 2, oz + P - esp]],
+              "#7e22ce", 0.75, "prateleira"
+            );
           }
         }
         // puxador
-        addBox(vxEnd - esp - 60, oy + A - esp - 30, oz + P - 8, 40, 6, 6, CORES.puxador, 1);
-      } else if(v.tipo === "lixeira"){
-        addFace([[vx+esp, oy+esp, oz+P-3],[vxEnd-esp, oy+esp, oz+P-3],[vxEnd-esp, oy+A-esp, oz+P-3],[vx+esp, oy+A-esp, oz+P-3]], "#22c55e", 0.55, "lixeira");
+        addBox(vxEnd - esp - 60, oy + A - esp - 30, oz + P - 8, 40, 6, 6, COR_PUXADOR, 1, "acessorio");
+      } else if (v.tipo === "lixeira") {
+        addFace(
+          [[vx + esp, oy + esp, oz + P - 3], [vxEnd - esp, oy + esp, oz + P - 3],
+           [vxEnd - esp, oy + A - esp, oz + P - 3], [vx + esp, oy + A - esp, oz + P - 3]],
+          "#22c55e", 0.5, "vidro"
+        );
       }
 
       xCursor += vw;
     });
 
-    return { faces, L, A, P, ox, oy, oz };
+    return { faces, L, A, P, ox, oy, oz, corPerfil, corVidro, corPerfilBorda, corVidroBorda };
   };
 
-  // ====== RENDER ======
-  Viewer.prototype.render = function(){
-    if(!this.canvas || !this.ctx) return;
+  /* =====================================================================
+     RENDER
+     ===================================================================== */
+  Viewer.prototype.render = function () {
+    if (!this.canvas || !this.ctx) return;
     const ctx = this.ctx;
     const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
     ctx.clearRect(0, 0, W, H);
@@ -348,143 +462,262 @@
     const msgEl = document.getElementById("viewerMsg");
     const hudEl = document.getElementById("viewerHud");
 
-    if(!amb){
-      if(msgEl){ msgEl.style.display = "block"; msgEl.textContent = state.ambientes.length ? "Selecione um ambiente." : "Adicione ambientes para visualizar."; }
-      if(hudEl) hudEl.textContent = "—";
+    if (!amb) {
+      if (msgEl) {
+        msgEl.style.display = "block";
+        msgEl.textContent = state.ambientes.length ? "Selecione um ambiente." : "Adicione ambientes para visualizar.";
+      }
+      if (hudEl) hudEl.textContent = "—";
       return;
     }
-    if(msgEl) msgEl.style.display = "none";
-    if(hudEl) hudEl.textContent = `${amb.nome} · ${amb.largura}×${amb.altura}×${amb.profundidade}mm`;
+    if (msgEl) msgEl.style.display = "none";
+    if (hudEl) hudEl.textContent = `${amb.nome} · ${amb.largura}×${amb.altura}×${amb.profundidade}mm · ${this.modo}${this.cotas ? " · cotas" : ""}`;
 
-    // 1) Gera faces 3D
-    const { faces, ox, oy, oz } = this._gerarFaces(amb);
+    const dados = this._gerarFaces(amb);
 
-    // 2) Projeta cada face e calcula z médio APÓS rotação (profundidade real)
-    const proj = faces.map(f => {
-      // centro da face em 3D
+    // Projeta e ordena por profundidade real
+    const proj = dados.faces.map(f => {
       let c = [f.cx, f.cy, f.cz];
-      // rotação
       c = rotY(c, this.rotY);
       c = rotX(c, this.rotX);
-      // z real = profundidade após rotação
       return {
         face: f,
         screenPts: f.pts.map(p => this._proj(p[0], p[1], p[2])),
         zReal: c[2]
       };
     });
-
-    // 3) ORDENA: maior z (mais distante) primeiro → painter's algorithm
     proj.sort((a, b) => b.zReal - a.zReal);
 
-    // 4) Desenha
+    // Desenha faces
     proj.forEach(({ face, screenPts }) => {
       ctx.beginPath();
       ctx.moveTo(screenPts[0].x, screenPts[0].y);
-      for(let i=1; i<screenPts.length; i++) ctx.lineTo(screenPts[i].x, screenPts[i].y);
+      for (let i = 1; i < screenPts.length; i++) ctx.lineTo(screenPts[i].x, screenPts[i].y);
       ctx.closePath();
 
-      if(this.modo === "wireframe"){
-        ctx.strokeStyle = face.cor;
+      if (this.modo === "wireframe") {
+        // Só linhas, cor depende do tipo
+        let corLinha;
+        if (face.tipo === "vidro") corLinha = escurecer(dados.corVidro, 0.7);
+        else if (face.tipo === "prateleira") corLinha = "#a855f7";
+        else if (face.tipo === "acessorio") corLinha = COR_PUXADOR;
+        else corLinha = dados.corPerfil;
+        ctx.strokeStyle = corLinha;
         ctx.lineWidth = 1.2;
         ctx.stroke();
-      } else {
-        // cor com sombreamento e alpha
-        ctx.fillStyle = this._applyShade(face.cor, face.shade, face.alpha);
+      } else if (this.modo === "solido") {
+        // Preenchimento com cor + sombreamento
+        ctx.fillStyle = this._aplicarShade(face.cor, face.shade, face.alpha);
         ctx.fill();
-        // contorno
-        if(this.modo === "solido"){
-          ctx.strokeStyle = "rgba(255,255,255,0.18)";
-          ctx.lineWidth = 0.6;
-          ctx.stroke();
-        } else if(this.modo === "transp"){
-          ctx.strokeStyle = this._applyAlpha(face.cor, 0.6);
-          ctx.lineWidth = 0.8;
-          ctx.stroke();
-        }
+        // Contorno (mais escuro)
+        let corBorda;
+        if (face.tipo === "vidro") corBorda = dados.corVidroBorda;
+        else if (face.tipo === "prateleira") corBorda = "#7e22ce";
+        else if (face.tipo === "acessorio") corBorda = "#6b7280";
+        else corBorda = dados.corPerfilBorda;
+        ctx.strokeStyle = corBorda;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      } else {
+        // Transparente: preenchimento fraco + contorno colorido
+        ctx.fillStyle = this._aplicarShade(face.cor, face.shade, 0.15);
+        ctx.fill();
+        let corBorda;
+        if (face.tipo === "vidro") corBorda = dados.corVidroBorda;
+        else if (face.tipo === "prateleira") corBorda = "#a855f7";
+        else if (face.tipo === "acessorio") corBorda = "#9ca3af";
+        else corBorda = dados.corPerfil;
+        ctx.strokeStyle = corBorda;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
       }
     });
 
-    // 5) Cotas 3D
-    if(this.cotas) this._desenharCotas(ctx, amb, ox, oy, oz);
+    // Cotas
+    if (this.cotas) this._desenharCotas(ctx, amb, dados);
 
-    // 6) Legenda + detalhes
+    // Legenda + detalhes
     this._renderLegenda(amb);
-    if(this._renderDetalhes) this._renderDetalhes(amb);
+    if (this._renderDetalhes) this._renderDetalhes(amb);
   };
 
-  Viewer.prototype._applyShade = function(hex, shade, alpha){
-    // hex → rgb, aplica shade e alpha
-    const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  Viewer.prototype._aplicarShade = function (hex, shade, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
     const r2 = Math.min(255, Math.round(r * shade));
     const g2 = Math.min(255, Math.round(g * shade));
     const b2 = Math.min(255, Math.round(b * shade));
-    if(alpha >= 1) return `rgb(${r2},${g2},${b2})`;
+    if (alpha >= 1) return `rgb(${r2},${g2},${b2})`;
     return `rgba(${r2},${g2},${b2},${alpha})`;
   };
-  Viewer.prototype._applyAlpha = function(hex, alpha){
-    const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
-    return `rgba(${r},${g},${b},${alpha})`;
-  };
 
-  Viewer.prototype._desenharCotas = function(ctx, amb, ox, oy, oz){
-    const L = +amb.largura, A = +amb.altura, P = +amb.profundidade;
-    const cor = "#fbbf24";
+  /* =====================================================================
+     COTAS
+     ===================================================================== */
+  Viewer.prototype._desenharCotas = function (ctx, amb, dados) {
+    const { L, A, P, ox, oy, oz } = dados;
     ctx.save();
-    ctx.strokeStyle = cor; ctx.fillStyle = cor;
-    ctx.lineWidth = 1.2; ctx.font = "bold 12px system-ui,Arial";
+    ctx.strokeStyle = COR_COTA;
+    ctx.fillStyle = COR_COTA;
+    ctx.lineWidth = 1.5;
+    ctx.font = "bold 11px system-ui,Arial";
     ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
 
-    // Largura (frente)
-    const pA = this._proj(ox, oy - 80, oz + P);
-    const pB = this._proj(ox + L, oy - 80, oz + P);
-    ctx.beginPath(); ctx.moveTo(pA.x, pA.y); ctx.lineTo(pB.x, pB.y); ctx.stroke();
-    seta(ctx, pA, pB, cor); seta(ctx, pB, pA, cor);
-    ctx.fillText(`${L}mm`, (pA.x+pB.x)/2, (pA.y+pB.y)/2 - 8);
+    // ===== Cota de Largura total (embaixo do móvel) =====
+    const pL1 = this._proj(ox, oy - 80, oz + P);
+    const pL2 = this._proj(ox + L, oy - 80, oz + P);
+    this._cotaLinha(ctx, pL1, pL2, `${L}mm`, "h");
 
-    // Altura (esquerda)
-    const pC = this._proj(ox - 80, oy, oz + P);
-    const pD = this._proj(ox - 80, oy + A, oz + P);
-    ctx.beginPath(); ctx.moveTo(pC.x, pC.y); ctx.lineTo(pD.x, pD.y); ctx.stroke();
-    seta(ctx, pC, pD, cor); seta(ctx, pD, pC, cor);
-    ctx.save(); ctx.translate((pC.x+pD.x)/2 - 10, (pC.y+pD.y)/2); ctx.rotate(-Math.PI/2); ctx.fillText(`${A}mm`, 0, 0); ctx.restore();
+    // ===== Cota de Altura (lateral esquerda) =====
+    const pA1 = this._proj(ox - 80, oy, oz + P);
+    const pA2 = this._proj(ox - 80, oy + A, oz + P);
+    this._cotaLinha(ctx, pA1, pA2, `${A}mm`, "v");
 
-    // Profundidade (direita)
-    const pE = this._proj(ox + L + 60, oy, oz);
-    const pF = this._proj(ox + L + 60, oy, oz + P);
-    ctx.beginPath(); ctx.moveTo(pE.x, pE.y); ctx.lineTo(pF.x, pF.y); ctx.stroke();
-    seta(ctx, pE, pF, cor); seta(ctx, pF, pE, cor);
-    ctx.fillText(`${P}mm`, (pE.x+pF.x)/2 + 24, (pE.y+pF.y)/2);
+    // ===== Cota de Profundidade (lateral direita) =====
+    const pP1 = this._proj(ox + L + 80, oy - 20, oz);
+    const pP2 = this._proj(ox + L + 80, oy - 20, oz + P);
+    this._cotaLinha(ctx, pP1, pP2, `${P}mm`, "d");
+
+    // ===== Cotas de cada vão (largura) =====
+    const esp = 18;
+    let xCursor = 0;
+    (amb.vaos || []).forEach((v, i) => {
+      const vw = +v.largura;
+      const vx = ox + xCursor;
+      const yBase = oy - 30;
+      const zBase = oz + P + 5;
+
+      // Largura do vão
+      const v1 = this._proj(vx + esp, yBase, zBase);
+      const v2 = this._proj(vx + vw - esp, yBase, zBase);
+      this._cotaLinha(ctx, v1, v2, `${vw}mm`, "h", true);
+
+      // Nome do vão
+      const vMid = this._proj(vx + vw / 2, yBase + 20, zBase);
+      ctx.font = "bold 10px system-ui,Arial";
+      ctx.fillStyle = COR_COTA;
+      ctx.fillText(v.descricao || TIPOS_VAO_NOME(v.tipo), vMid.x, vMid.y);
+
+      // ===== Altura de cada gaveta =====
+      if (v.tipo === "gaveta" || v.tipo === "gaveta_dupla") {
+        const n = v.tipo === "gaveta_dupla" ? v.gavetasPortas * 2 : v.gavetasPortas;
+        const hG = (A - 2 * esp) / n;
+        for (let gi = 0; gi < n; gi++) {
+          const gy = oy + esp + gi * hG;
+          const gx = vx + vw + 10;
+          const g1 = this._proj(gx, gy, oz + P);
+          const g2 = this._proj(gx, gy + hG, oz + P);
+          this._cotaLinha(ctx, g1, g2, `${Math.round(hG)}`, "v", true);
+        }
+      }
+
+      // ===== Altura de porta =====
+      if (["porta_simples", "porta_dupla", "porta_tempero", "cristaleira", "nicho"].includes(v.tipo)) {
+        const gx = vx + vw + 10;
+        const g1 = this._proj(gx, oy + esp, oz + P);
+        const g2 = this._proj(gx, oy + A - esp, oz + P);
+        this._cotaLinha(ctx, g1, g2, `${A - 2 * esp}`, "v", true);
+      }
+
+      xCursor += vw;
+    });
 
     ctx.restore();
   };
 
-  function seta(ctx, p1, p2, cor){
+  Viewer.prototype._cotaLinha = function (ctx, p1, p2, label, orientacao, pequena) {
+    const cor = COR_COTA;
+    const setaSize = pequena ? 4 : 6;
+
+    // Linha
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.strokeStyle = cor;
+    ctx.lineWidth = pequena ? 1 : 1.5;
+    ctx.stroke();
+
+    // Setas
     const ang = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-    const s = 6;
+    ctx.fillStyle = cor;
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p1.x + setaSize * Math.cos(ang - 0.4), p1.y + setaSize * Math.sin(ang - 0.4));
+    ctx.lineTo(p1.x + setaSize * Math.cos(ang + 0.4), p1.y + setaSize * Math.sin(ang + 0.4));
+    ctx.closePath();
+    ctx.fill();
+
     ctx.beginPath();
     ctx.moveTo(p2.x, p2.y);
-    ctx.lineTo(p2.x - s*Math.cos(ang-0.4), p2.y - s*Math.sin(ang-0.4));
-    ctx.lineTo(p2.x - s*Math.cos(ang+0.4), p2.y - s*Math.sin(ang+0.4));
+    ctx.lineTo(p2.x - setaSize * Math.cos(ang - 0.4), p2.y - setaSize * Math.sin(ang - 0.4));
+    ctx.lineTo(p2.x - setaSize * Math.cos(ang + 0.4), p2.y - setaSize * Math.sin(ang + 0.4));
     ctx.closePath();
-    ctx.fillStyle = cor;
     ctx.fill();
-  }
 
-  Viewer.prototype._renderLegenda = function(amb){
-    const el = document.getElementById("viewerLegend");
-    if(!el) return;
-    el.innerHTML = `
-      <span class="vl-item"><span class="lg-cor" style="background:${CORES.estrutura}"></span>Estrutura</span>
-      <span class="vl-item"><span class="lg-cor" style="background:${CORES.vidro}"></span>Vidro</span>
-      <span class="vl-item"><span class="lg-cor" style="background:${CORES.acm}"></span>ACM</span>
-      <span class="vl-item"><span class="lg-cor" style="background:${CORES.prat}"></span>Prateleira</span>
-      <span class="vl-item"><span class="lg-cor" style="background:${corDoPerfil(amb.corPerfil)}"></span>Perfil ${amb.corPerfil||'-'}</span>
-      <span class="vl-item"><span class="lg-cor" style="background:#fbbf24"></span>Cotas</span>`;
+    // Texto (com fundo)
+    const mx = (p1.x + p2.x) / 2;
+    const my = (p1.y + p2.y) / 2;
+    const fontSize = pequena ? 9 : 11;
+    ctx.font = `bold ${fontSize}px system-ui,Arial`;
+    const txtW = ctx.measureText(label).width + 8;
+    const txtH = fontSize + 4;
+
+    ctx.save();
+    ctx.translate(mx, my);
+    if (orientacao === "v") {
+      ctx.rotate(-Math.PI / 2);
+    }
+    ctx.fillStyle = COR_COTA_TXT;
+    ctx.fillRect(-txtW / 2, -txtH / 2, txtW, txtH);
+    ctx.fillStyle = cor;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
   };
 
-  // Exporta helpers para app.js
+  function TIPOS_VAO_NOME(tipo) {
+    const M = {
+      gaveta: "Gaveta",
+      gaveta_dupla: "Gaveta Dupla",
+      porta_tempero: "Porta Tempero",
+      lixeira: "Lixeira",
+      nicho: "Nicho",
+      porta_simples: "Porta",
+      porta_dupla: "Porta Dupla",
+      cristaleira: "Cristaleira"
+    };
+    return M[tipo] || tipo;
+  }
+
+  /* =====================================================================
+     LEGENDA
+     ===================================================================== */
+  Viewer.prototype._renderLegenda = function (amb) {
+    const el = document.getElementById("viewerLegend");
+    if (!el) return;
+    const corP = corDoPerfil(amb.corPerfil);
+    const corV = corDoVidro(amb.corVidro);
+    el.innerHTML = `
+      <span class="vl-item"><span class="lg-cor" style="background:${corP};border:1px solid #666"></span>Perfil ${escapeHtmlLocal(amb.corPerfil || "-")}</span>
+      <span class="vl-item"><span class="lg-cor" style="background:${corV};border:1px solid #666"></span>Vidro ${escapeHtmlLocal(amb.corVidro || "-")}</span>
+      <span class="vl-item"><span class="lg-cor" style="background:#a855f7"></span>Prateleira</span>
+      <span class="vl-item"><span class="lg-cor" style="background:${COR_PUXADOR}"></span>Puxador</span>
+      <span class="vl-item"><span class="lg-cor" style="background:${COR_COTA}"></span>Cotas</span>`;
+  };
+
+  function escapeHtmlLocal(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  /* =====================================================================
+     EXPORTA
+     ===================================================================== */
   global.viewer3D = new Viewer();
-  global.CORES_VIEWER = CORES;
+  global.CORES_VIEWER = { CORES_PERFIL_HEX, CORES_VIDRO_HEX };
 
 })(window);
