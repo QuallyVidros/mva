@@ -178,14 +178,36 @@
     }
   };
 
-  Viewer.prototype._autoFit = function (L, A, P) {
+   Viewer.prototype._autoFit = function (L, A, P) {
     const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
-    const cantos = [[-L/2, -A/2, -P/2], [L/2, -A/2, -P/2], [L/2, A/2, -P/2], [-L/2, A/2, -P/2], [-L/2, -A/2, P/2], [L/2, -A/2, P/2], [L/2, A/2, P/2], [-L/2, A/2, P/2]];
+    // Adiciona margem de segurança para as cotas
+    const margem = 0.6; 
+    
+    const cantos = [
+      [-L/2, -A/2, -P/2], [L/2, -A/2, -P/2], [L/2, A/2, -P/2], [-L/2, A/2, -P/2],
+      [-L/2, -A/2, P/2], [L/2, -A/2, P/2], [L/2, A/2, P/2], [-L/2, A/2, P/2]
+    ];
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    cantos.forEach(c => { let p = rotY(c, this.rotY); p = rotX(p, this.rotX); const persp = 1400 / (1400 + p[2] * 0.6); const px = p[0] * persp, py = p[1] * persp; if (px < minX) minX = px; if (px > maxX) maxX = px; if (py < minY) minY = py; if (py > maxY) maxY = py; });
-    const bboxW = maxX - minX, bboxH = maxY - minY;
-    const fitZoom = Math.min(W / bboxW, H / bboxH) * 0.85;
-    this.zoom = Math.max(0.05, Math.min(2, fitZoom));
+    
+    cantos.forEach(c => { 
+      let p = rotY(c, this.rotY); 
+      p = rotX(p, this.rotX); 
+      const persp = 1400 / (1400 + p[2] * 0.6); 
+      const px = p[0] * persp, py = p[1] * persp; 
+      if (px < minX) minX = px; if (px > maxX) maxX = px; 
+      if (py < minY) minY = py; if (py > maxY) maxY = py; 
+    });
+    
+    const bboxW = maxX - minX || 1;
+    const bboxH = maxY - minY || 1;
+    const fitZoom = Math.min(W / bboxW, H / bboxH) * margem;
+    
+    // Força o zoom a ter um mínimo e máximo
+    this.zoom = Math.max(0.02, Math.min(1.5, fitZoom));
+    
+    // Zera o pan para garantir que fique no centro exato do Canvas
+    this.panX = 0;
+    this.panY = 0;
   };
 
   Viewer.prototype._proj = function (x, y, z) {
@@ -301,7 +323,7 @@
     return { faces, L, A, P, ox, oy, oz, corPerfil, corVidro, corPerfilBorda, corVidroBorda, esp };
   };
 
-    Viewer.prototype.render = function () {
+     Viewer.prototype.render = function () {
     if (!this.canvas || !this.ctx) return;
     const ctx = this.ctx;
     const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
@@ -330,18 +352,21 @@
     }
     if (msgEl) msgEl.style.display = "none";
     
-    // HUD atualizado
     const opacoStr = this.vidroOpaco ? "💎 OPACO" : "💧 TRANSPARENTE";
     if (hudEl) hudEl.textContent = `${amb.nome} · ${amb.largura}×${amb.altura}×${amb.profundidade}mm · ${this.modo.toUpperCase()} · VIDRO ${opacoStr}`;
 
-    // Auto-fit para garantir que o desenho apareça na tela
+    // CHAMA O AUTOFIT CORRIGIDO
     this._autoFit(+amb.largura, +amb.altura, +amb.profundidade);
     
     const dados = this._gerarFaces(amb);
 
     if (this.modo !== "wireframe") this._desenharSombraChao(ctx, dados);
 
-    const proj = dados.faces.map(f => { let c = [f.cx, f.cy, f.cz]; c = rotY(c, this.rotY); c = rotX(c, this.rotX); return { face: f, screenPts: f.pts.map(p => this._proj(p[0], p[1], p[2])), zReal: c[2] }; });
+    const proj = dados.faces.map(f => { 
+      let c = [f.cx, f.cy, f.cz]; 
+      c = rotY(c, this.rotY); c = rotX(c, this.rotX); 
+      return { face: f, screenPts: f.pts.map(p => this._proj(p[0], p[1], p[2])), zReal: c[2] }; 
+    });
     proj.sort((a, b) => b.zReal - a.zReal);
 
     proj.forEach(({ face, screenPts }) => {
@@ -351,13 +376,13 @@
 
       const isVidro = (face.tipo === "vidro" || face.tipo === "gaveta");
       
-      // Lógica de transparência definitiva
+      // Lógica Opaco vs Transparente 100% garantida
       let alpha = face.alpha;
       if (isVidro) {
         if (this.vidroOpaco) {
-          alpha = 1.0; // 100% Sólido
+          alpha = 1.0; // Opaco
         } else {
-          alpha = 0.65; // 65% Transparente (visível mas translúcido)
+          alpha = 0.55; // Transparente visível
         }
       }
 
@@ -365,19 +390,19 @@
         let corLinha = isVidro ? escurecer(dados.corVidro, 0.5) : (face.tipo === "prateleira" ? COR_PRAT : dados.corPerfil);
         ctx.strokeStyle = corLinha; ctx.lineWidth = 1.5; ctx.stroke();
       } else {
-        // Aplica a cor com o alpha calculado
+        // Aplica a cor
         ctx.fillStyle = this._aplicarAlpha(face.corFinal, alpha);
         ctx.fill();
 
-        // Reflexo SÓ se NÃO for opaco e NÃO estiver no modo Transp
-        if (!this.vidroOpaco && isVidro && this.modo === "solido") {
+        // Reflexo (só se não for opaco e não estiver no modo transp)
+        if (!this.vidroOpaco && isVidro && this.modo !== "transp") {
           const p0 = screenPts[0], p2 = screenPts[2];
           const gradRefl = ctx.createLinearGradient(p0.x, p0.y, p2.x, p2.y);
           gradRefl.addColorStop(0.3, "rgba(255,255,255,0)"); gradRefl.addColorStop(0.5, "rgba(255,255,255,0.2)"); gradRefl.addColorStop(0.7, "rgba(255,255,255,0)");
           ctx.fillStyle = gradRefl; ctx.fill();
         }
 
-        // Contorno Escuro para garantir que as divisões apareçam
+        // Borda
         let corBorda = isVidro ? escurecer(dados.corVidro, 0.5) : (face.tipo === "prateleira" ? escurecer(COR_PRAT, 0.7) : dados.corPerfilBorda);
         ctx.strokeStyle = corBorda; ctx.lineWidth = 1.5; ctx.stroke();
       }
@@ -386,7 +411,7 @@
     if (this.cotas) this._desenharCotas(ctx, amb, dados);
     this._renderLegenda(amb);
   };
-
+   
   Viewer.prototype._desenharSombraChao = function (ctx, dados) {
     const { L, P, ox, oy, oz } = dados;
     const chaoY = oy - 5;
