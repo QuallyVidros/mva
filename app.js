@@ -7,8 +7,8 @@
 /* =====================================================================
    ⚙️ CONFIGURAÇÃO DA NUVEM — URL FIXA
    ===================================================================== */
-const SHEETS_API = "👇 COLE SUA URL AQUI 👇";
-
+//const SHEETS_API = "👇 COLE SUA URL AQUI 👇";
+const SHEETS_API = "https://script.google.com/macros/s/AKfycbx2AWxCNe8dPzerLJqHKLQ3HZx0ZLo5WPJnj8MedGwIey49AHgJnc5GZSqjQYp-8fyCBQ/exec";
 /* =====================================================================
    CONSTANTES
    ===================================================================== */
