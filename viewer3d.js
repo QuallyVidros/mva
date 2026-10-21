@@ -229,13 +229,17 @@
     return { x: cx + p[0] * this.zoom * zPersp, y: cy + p[1] * this.zoom * zPersp, z: p[2] };
   };
 
-  Viewer.prototype._gerarFaces = function (amb) {
+    Viewer.prototype._gerarFaces = function (amb) {
     const faces = [];
     const L = +amb.largura, A = +amb.altura, P = +amb.profundidade;
     const ox = -L / 2, oy = -A / 2, oz = -P / 2;
     const vis = amb.visibilidade || "frente";
-    const corPerfil = corDoPerfil(amb.corPerfil), corVidro = corDoVidro(amb.corVidro);
-    const corPerfilBorda = escurecer(corPerfil, 0.6), corVidroBorda = escurecer(corVidro, 0.6);
+    
+    // Puxa as cores do orçamento
+    const corPerfil = corDoPerfil(amb.corPerfil);
+    const corVidro = corDoVidro(amb.corVidro);
+    const corPerfilBorda = escurecer(corPerfil, 0.7);
+    const corVidroBorda = escurecer(corVidro, 0.7);
 
     const EXPL = this.explosao;
     const centro = [0, 0, 0];
@@ -249,7 +253,7 @@
       return [n[0]/len, n[1]/len, n[2]/len];
     }
 
-    function addFace(pts, cor, alpha, tipo) {
+    function addFace(pts, corBase, alpha, tipo) {
       let ptsFinal = pts;
       if (EXPL > 0.001) {
         const cx = (pts[0][0]+pts[1][0]+pts[2][0]+pts[3][0])/4, cy = (pts[0][1]+pts[1][1]+pts[2][1]+pts[3][1])/4, cz = (pts[0][2]+pts[1][2]+pts[2][2]+pts[3][2])/4;
@@ -257,15 +261,19 @@
         const len = Math.hypot(dx, dy, dz) || 1, fator = EXPL * 600;
         ptsFinal = pts.map(p => [p[0] + (dx/len)*fator, p[1] + (dy/len)*fator, p[2] + (dz/len)*fator]);
       }
-      const n = normal(ptsFinal), shade = 0.75 + 0.25 * Math.max(0, n[1]);
-      const corFinal = clarear(escurecer(cor, shade), 0.05);
+      
+      // Iluminação suave para não alterar a cor real (Shade entre 0.85 e 1.0)
+      const n = normal(ptsFinal); 
+      const shade = 0.85 + 0.15 * Math.max(0, n[1]); 
+      
+      // Aplica a iluminação em cima da cor escolhida
+      const corFinal = clarear(escurecer(corBase, shade), 0.02);
 
-      // Força opacidade total se o botão estiver ativo
       let finalAlpha = alpha;
       if (OPACO && (tipo === "vidro" || tipo === "gaveta")) finalAlpha = 1.0;
 
       const cx = (ptsFinal[0][0]+ptsFinal[1][0]+ptsFinal[2][0]+ptsFinal[3][0])/4, cy = (ptsFinal[0][1]+ptsFinal[1][1]+ptsFinal[2][1]+ptsFinal[3][1])/4, cz = (ptsFinal[0][2]+ptsFinal[1][2]+ptsFinal[2][2]+ptsFinal[3][2])/4;
-      faces.push({ pts: ptsFinal, cor, corFinal, alpha: finalAlpha, tipo, shade, cx, cy, cz });
+      faces.push({ pts: ptsFinal, cor: corBase, corFinal, alpha: finalAlpha, tipo, shade, cx, cy, cz });
     }
 
     function addBox(x, y, z, dx, dy, dz, cor, alpha, tipoBox) {
@@ -278,8 +286,11 @@
       addFace([[x,y,z],[x+dx,y,z],[x+dx,y,z+dz],[x,y,z+dz]], cor, alpha, tipoBox);
     }
 
+    // Painel frontal de fundo (puxa a cor do vidro exata)
     addFace([[ox,oy,oz+P],[ox+L,oy,oz+P],[ox+L,oy+A,oz+P],[ox,oy+A,oz+P]], corVidro, 0.12, "vidro");
+    // Base
     addFace([[ox,oy,oz],[ox+L,oy,oz],[ox+L,oy,oz+P],[ox,oy,oz+P]], COR_BASE_ACM, 0.95, "acm");
+    // Topo (puxa a cor do perfil)
     addFace([[ox,oy+A,oz],[ox+L,oy+A,oz],[ox+L,oy+A,oz+P],[ox,oy+A,oz+P]], corPerfil, 1, "perfil");
 
     if (vis === "todos") addFace([[ox,oy,oz],[ox+L,oy,oz],[ox+L,oy+A,oz],[ox,oy+A,oz]], corVidro, 0.12, "vidro");
@@ -291,11 +302,16 @@
 
     (amb.vaos || []).forEach(v => {
       const vw = +v.largura, vx = ox + xCursor, vxEnd = vx + vw;
+      
+      // Puxa a cor individual do vão (se existir) ou a global
+      const cPerfilVao = v.corPerfil ? corDoPerfil(v.corPerfil) : corPerfil;
+      const cVidroVao = v.corVidro ? corDoVidro(v.corVidro) : corVidro;
 
-      addBox(vx, oy, oz, esp, A, P, corPerfil, 1, "perfil");
-      addBox(vxEnd - esp, oy, oz, esp, A, P, corPerfil, 1, "perfil");
-      addBox(vx + esp, oy + A - esp, oz, vw - 2 * esp, esp, P, corPerfil, 1, "perfil");
-      addBox(vx + esp, oy, oz, vw - 2 * esp, esp, P, corPerfil, 1, "perfil");
+      // Desenha a moldura na cor do perfil
+      addBox(vx, oy, oz, esp, A, P, cPerfilVao, 1, "perfil");
+      addBox(vxEnd - esp, oy, oz, esp, A, P, cPerfilVao, 1, "perfil");
+      addBox(vx + esp, oy + A - esp, oz, vw - 2 * esp, esp, P, cPerfilVao, 1, "perfil");
+      addBox(vx + esp, oy, oz, vw - 2 * esp, esp, P, cPerfilVao, 1, "perfil");
 
       const nPortas = Math.max(1, v.gavetasPortas || 1);
       const isGaveta = (v.tipo === "gaveta" || v.tipo === "gaveta_dupla");
@@ -306,16 +322,18 @@
         const hG = (A - 2 * esp) / n;
         for (let gi = 0; gi < n; gi++) {
           const gy = oy + esp + gi * hG;
-          addFace([[vx+esp, gy, oz+P-3],[vxEnd-esp, gy, oz+P-3],[vxEnd-esp, gy+hG, oz+P-3],[vx+esp, gy+hG, oz+P-3]], corVidro, OPACO ? 1 : 0.9, "gaveta");
-          addBox(vx + esp, gy, oz + P - 4, vw - 2 * esp, 2, 2, escurecer(corPerfil, 0.7), 1, "perfil");
-          if (gi < n - 1) addBox(vx + esp, gy + hG - 2, oz, vw - 2 * esp, 4, P, corPerfil, 1, "perfil");
+          // Frente da gaveta na cor do vidro
+          addFace([[vx+esp, gy, oz+P-3],[vxEnd-esp, gy, oz+P-3],[vxEnd-esp, gy+hG, oz+P-3],[vx+esp, gy+hG, oz+P-3]], cVidroVao, OPACO ? 1 : 0.9, "gaveta");
+          addBox(vx + esp, gy, oz + P - 4, vw - 2 * esp, 2, 2, escurecer(cPerfilVao, 0.7), 1, "perfil");
+          if (gi < n - 1) addBox(vx + esp, gy + hG - 2, oz, vw - 2 * esp, 4, P, cPerfilVao, 1, "perfil");
         }
       } else if (isPorta) {
         const largPorta = (vw - 2 * esp - (nPortas - 1) * esp) / nPortas;
         for (let pi = 0; pi < nPortas; pi++) {
           const px = vx + esp + pi * (largPorta + esp);
-          addFace([[px, oy+esp, oz+P-3],[px+largPorta, oy+esp, oz+P-3],[px+largPorta, oy+A-esp, oz+P-3],[px, oy+A-esp, oz+P-3]], corVidro, OPACO ? 1 : 0.5, "vidro");
-          if (pi < nPortas - 1) addBox(px + largPorta, oy + esp, oz, esp, A - 2 * esp, P, corPerfil, 1, "perfil");
+          // Vidro da porta na cor do vidro
+          addFace([[px, oy+esp, oz+P-3],[px+largPorta, oy+esp, oz+P-3],[px+largPorta, oy+A-esp, oz+P-3],[px, oy+A-esp, oz+P-3]], cVidroVao, OPACO ? 1 : 0.5, "vidro");
+          if (pi < nPortas - 1) addBox(px + largPorta, oy + esp, oz, esp, A - 2 * esp, P, cPerfilVao, 1, "perfil");
           addBox(px + largPorta - esp - 40, oy + A - esp - 30, oz + P - 8, 30, 6, 6, COR_PUXADOR, 1, "acessorio");
         }
         if (v.temPrateleiras && v.qtdPrateleiras > 0) {
@@ -333,14 +351,12 @@
 
     return { faces, L, A, P, ox, oy, oz, corPerfil, corVidro, corPerfilBorda, corVidroBorda, esp };
   };
-
-       Viewer.prototype.render = function () {
+        Viewer.prototype.render = function () {
     if (!this.canvas || !this.ctx) return;
     const ctx = this.ctx;
     const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
     ctx.clearRect(0, 0, W, H);
 
-    // Fundo
     if (this.fundoBranco) {
       const grad = ctx.createRadialGradient(W/2, H*0.2, 50, W/2, H, Math.max(W, H));
       grad.addColorStop(0, "#ffffff"); grad.addColorStop(1, "#e8ecf1");
@@ -386,39 +402,25 @@
 
       const isVidro = (face.tipo === "vidro" || face.tipo === "gaveta");
       
-      // LÓGICA DEFINITIVA DE OPACIDADE
       let alphaFinal = face.alpha || 1; 
       if (isVidro) {
         if (this.vidroOpaco) {
-          alphaFinal = 1.0; // 100% SÓLIDO (fecha o cubo)
+          alphaFinal = 1.0; // Opaco 100%
         } else {
-          alphaFinal = 0.55; // Transparente normal
+          alphaFinal = 0.55; // Transparente
         }
       }
 
       if (this.modo === "wireframe") {
-        let corLinha = isVidro ? escurecer(dados.corVidro, 0.5) : (face.tipo === "prateleira" ? COR_PRAT : dados.corPerfil);
+        let corLinha = isVidro ? escurecer(face.cor, 0.5) : (face.tipo === "prateleira" ? COR_PRAT : face.cor);
         ctx.strokeStyle = corLinha; ctx.lineWidth = 1.5; ctx.stroke();
       } else {
-        // Se for sólido, não usa "rgba", usa a cor pura para garantir que não tenha transparência
-        if (alphaFinal >= 1.0) {
-          ctx.fillStyle = face.corFinal; 
-        } else {
-          ctx.fillStyle = this._aplicarAlpha(face.corFinal, alphaFinal);
-        }
-        
+        // Usa a cor final calculada lá em cima (corFinal)
+        ctx.fillStyle = this._aplicarAlpha(face.corFinal, alphaFinal);
         ctx.fill();
 
-        // Reflexo (só se não for opaco)
-        if (!this.vidroOpaco && isVidro && this.modo !== "transp") {
-          const p0 = screenPts[0], p2 = screenPts[2];
-          const gradRefl = ctx.createLinearGradient(p0.x, p0.y, p2.x, p2.y);
-          gradRefl.addColorStop(0.3, "rgba(255,255,255,0)"); gradRefl.addColorStop(0.5, "rgba(255,255,255,0.2)"); gradRefl.addColorStop(0.7, "rgba(255,255,255,0)");
-          ctx.fillStyle = gradRefl; ctx.fill();
-        }
-
-        // Borda
-        let corBorda = isVidro ? escurecer(dados.corVidro, 0.5) : (face.tipo === "prateleira" ? escurecer(COR_PRAT, 0.7) : dados.corPerfilBorda);
+        // Borda escura para separar os blocos
+        let corBorda = isVidro ? escurecer(face.cor, 0.6) : (face.tipo === "prateleira" ? escurecer(COR_PRAT, 0.7) : escurecer(face.cor, 0.6));
         ctx.strokeStyle = corBorda; ctx.lineWidth = 1.5; ctx.stroke();
       }
     });
