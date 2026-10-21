@@ -345,8 +345,14 @@
         let corLinha = (face.tipo === "vidro" || face.tipo === "gaveta") ? escurecer(dados.corVidro, 0.5) : (face.tipo === "prateleira" ? COR_PRAT : dados.corPerfil);
         ctx.strokeStyle = corLinha; ctx.lineWidth = 1.5; ctx.stroke();
       } else if (this.modo === "solido") {
-        // CORRIGIDO AQUI: Usa face.alpha que já foi forçado para 1 se Opaco estiver ativo
-        ctx.fillStyle = this._aplicarAlpha(face.corFinal, face.alpha);
+        // SE O BOTÃO OPACO ESTIVER ATIVO, FORÇA COR SÓLIDA (sem transparência)
+        if (this.vidroOpaco && (face.tipo === "vidro" || face.tipo === "gaveta")) {
+           ctx.fillStyle = face.corFinal; // Cor pura, 100% opaca
+        } else {
+           // Comportamento normal (transparente)
+           ctx.fillStyle = this._aplicarAlpha(face.corFinal, face.alpha);
+        }
+        
         ctx.fill();
 
         if (!this.vidroOpaco && (face.tipo === "vidro" || face.tipo === "gaveta")) {
