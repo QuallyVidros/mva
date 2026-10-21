@@ -301,12 +301,13 @@
     return { faces, L, A, P, ox, oy, oz, corPerfil, corVidro, corPerfilBorda, corVidroBorda, esp };
   };
 
-   Viewer.prototype.render = function () {
+    Viewer.prototype.render = function () {
     if (!this.canvas || !this.ctx) return;
     const ctx = this.ctx;
     const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
     ctx.clearRect(0, 0, W, H);
 
+    // Fundo
     if (this.fundoBranco) {
       const grad = ctx.createRadialGradient(W/2, H*0.2, 50, W/2, H, Math.max(W, H));
       grad.addColorStop(0, "#ffffff"); grad.addColorStop(1, "#e8ecf1");
@@ -329,11 +330,13 @@
     }
     if (msgEl) msgEl.style.display = "none";
     
-    // HUD mostra o estado real
+    // HUD atualizado
     const opacoStr = this.vidroOpaco ? "💎 OPACO" : "💧 TRANSPARENTE";
     if (hudEl) hudEl.textContent = `${amb.nome} · ${amb.largura}×${amb.altura}×${amb.profundidade}mm · ${this.modo.toUpperCase()} · VIDRO ${opacoStr}`;
 
+    // Auto-fit para garantir que o desenho apareça na tela
     this._autoFit(+amb.largura, +amb.altura, +amb.profundidade);
+    
     const dados = this._gerarFaces(amb);
 
     if (this.modo !== "wireframe") this._desenharSombraChao(ctx, dados);
@@ -348,33 +351,35 @@
 
       const isVidro = (face.tipo === "vidro" || face.tipo === "gaveta");
       
-      // FORÇA OPACIDADE TOTAL SE O BOTÃO ESTIVER ATIVO
-      let alphaFinal = face.alpha;
-      if (this.vidroOpaco && isVidro) {
-        alphaFinal = 1.0; 
-      } else if (this.modo === "transp" && isVidro) {
-        alphaFinal = 0.15; // Transparência forçada no modo "Transp"
+      // Lógica de transparência definitiva
+      let alpha = face.alpha;
+      if (isVidro) {
+        if (this.vidroOpaco) {
+          alpha = 1.0; // 100% Sólido
+        } else {
+          alpha = 0.65; // 65% Transparente (visível mas translúcido)
+        }
       }
 
       if (this.modo === "wireframe") {
         let corLinha = isVidro ? escurecer(dados.corVidro, 0.5) : (face.tipo === "prateleira" ? COR_PRAT : dados.corPerfil);
         ctx.strokeStyle = corLinha; ctx.lineWidth = 1.5; ctx.stroke();
       } else {
-        // Desenha cor (Sólida se alpha for 1)
-        ctx.fillStyle = this._aplicarAlpha(face.corFinal, alphaFinal);
+        // Aplica a cor com o alpha calculado
+        ctx.fillStyle = this._aplicarAlpha(face.corFinal, alpha);
         ctx.fill();
 
-        // Reflexo SÓ se não for opaco
-        if (!this.vidroOpaco && isVidro && this.modo !== "transp") {
+        // Reflexo SÓ se NÃO for opaco e NÃO estiver no modo Transp
+        if (!this.vidroOpaco && isVidro && this.modo === "solido") {
           const p0 = screenPts[0], p2 = screenPts[2];
           const gradRefl = ctx.createLinearGradient(p0.x, p0.y, p2.x, p2.y);
-          gradRefl.addColorStop(0.3, "rgba(255,255,255,0)"); gradRefl.addColorStop(0.5, "rgba(255,255,255,0.25)"); gradRefl.addColorStop(0.7, "rgba(255,255,255,0)");
+          gradRefl.addColorStop(0.3, "rgba(255,255,255,0)"); gradRefl.addColorStop(0.5, "rgba(255,255,255,0.2)"); gradRefl.addColorStop(0.7, "rgba(255,255,255,0)");
           ctx.fillStyle = gradRefl; ctx.fill();
         }
 
-        // Borda
-        let corBorda = isVidro ? dados.corVidroBorda : (face.tipo === "prateleira" ? escurecer(COR_PRAT, 0.7) : dados.corPerfilBorda);
-        ctx.strokeStyle = corBorda; ctx.lineWidth = 1.2; ctx.stroke();
+        // Contorno Escuro para garantir que as divisões apareçam
+        let corBorda = isVidro ? escurecer(dados.corVidro, 0.5) : (face.tipo === "prateleira" ? escurecer(COR_PRAT, 0.7) : dados.corPerfilBorda);
+        ctx.strokeStyle = corBorda; ctx.lineWidth = 1.5; ctx.stroke();
       }
     });
 
