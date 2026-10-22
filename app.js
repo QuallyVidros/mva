@@ -1,5 +1,5 @@
 /* =====================================================================
-   OrçaProQually v7.5 — app.js (URL FIXA + Prateleiras em Portas)
+   OrçaProQually v7.6 — app.js (Correções de Fórmula, Opaco e Layout)
    ===================================================================== */
 
 "use strict";
@@ -7,8 +7,8 @@
 /* =====================================================================
    ⚙️ CONFIGURAÇÃO DA NUVEM — URL FIXA
    ===================================================================== */
-//const SHEETS_API = "👇 COLE SUA URL AQUI 👇";
 const SHEETS_API = "https://script.google.com/macros/s/AKfycbx2AWxCNe8dPzerLJqHKLQ3HZx0ZLo5WPJnj8MedGwIey49AHgJnc5GZSqjQYp-8fyCBQ/exec";
+
 /* =====================================================================
    CONSTANTES
    ===================================================================== */
@@ -246,53 +246,47 @@ function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":
 function toast(msg, err) { const t = document.getElementById("toast"); if (!t) return; t.textContent = msg; t.className = "toast show" + (err ? " err" : ""); setTimeout(() => { t.className = "toast"; }, 2400); }
 function quickHash(obj) { const s = JSON.stringify(obj); let h = 5381; for (let i = 0; i < s.length; i++) { h = ((h << 5) + h) + s.charCodeAt(i); h = h | 0; } return h.toString(36) + "_" + s.length; }
 function matById(id) { if (!state || !state.materiais) return null; for (const cat of Object.values(state.materiais)) { for (const m of cat) if (m.id === id) return m; } return null; }
+
+/* =====================================================================
+   FÓRMULA MATEMÁTICA (AQUI ESTAVA O ERRO DE CHAVES)
+   ===================================================================== */
 function evalFormula(formula, vars) {
   if (formula === "" || formula == null) return 0;
   
-  // 1. Cria as variáveis dinâmicas (Metades, Descontos, Arredondamentos)
   const novasVars = { 
     ...vars, 
     LM: (vars.L || 0) / 2, 
     PM: (vars.P || 0) / 2,
     LM_D: ((vars.L || 0) / 2) - 25,
     PM_D: ((vars.P || 0) / 2) - 25,
-    Math: Math // Permite usar Math.ceil e Math.floor
+    Math: Math 
   };
 
   try {
-    // 2. Substitui o nome das variáveis (L, A, P, etc) pelos valores reais
     let expr = String(formula).replace(/\b(L|A|P|N|M|LM|PM|LM_D|PM_D)\b/g, ch => {
       return novasVars[ch] !== undefined ? novasVars[ch] : ch;
     });
 
-    // 3. TRADUÇÃO DO "SE" DO EXCEL PARA JAVASCRIPT
-    // Transforma o "SE(condição; verdadeiro; falso)" em "(condição ? verdadeiro : falso)"
-    // Usamos um loop para resolver SEs aninhados
     let oldExpr;
     do {
       oldExpr = expr;
       expr = expr.replace(/(?:SE|se)\s*\(([^,;]+)[,;]([^,;]+)[,;]([^,;()]+(?:\([^)]*\))?[^,;()]*)\)/gi, '($1 ? $2 : $3)');
     } while (expr !== oldExpr);
 
-    // Traduz E() e OU()
     expr = expr.replace(/(?:E|e)\s*\(([^;]+);\s*([^;)]+)\)/gi, '($1 && $2)');
     expr = expr.replace(/(?:OU|ou)\s*\(([^;]+);\s*([^;)]+)\)/gi, '($1 || $2)');
-
-    // Troca ponto e vírgula restante por vírgula (para o caso de ser usado em funções do Math)
     expr = expr.replace(/;/g, ',');
 
-    // 4. Executa o cálculo matemático
     const v = Function("Math", `"use strict"; return (${expr});`)(Math);
-    
-    // Se o resultado for booleano (true/false), converte para 1/0
     if (v === true) return 1;
     if (v === false) return 0;
-    
     return isFinite(v) ? v : 0;
   } catch (e) { 
     console.warn("Erro na fórmula:", formula, e);
-    return 0; }
+    return 0; 
   }
+}
+
 function corClass(cor) { return "pill " + (cor || "adefinir").toLowerCase().replace(/[^a-z]/g, ""); }
 function corPill(cor, prefixo) { return `<span class="${corClass(cor)}">${escapeHtml((prefixo || "") + (cor || "A definir"))}</span>`; }
 function corDoPerfil(cor) { const map = { "Bronze": "#a0522d", "Preto": "#1a1a1a", "Branco": "#e5e7eb", "Champanhe": "#d9cbb0", "Fosco": "#4b5563", "A definir": "#7c3aed" }; return map[cor] || "#64748b"; }
@@ -381,7 +375,7 @@ function calcularVao(vao, movel) {
     const qtd = Math.round(evalFormula(it.qtdFormula, vars)); if (qtd <= 0) return;
     for (let i = 0; i < qtd; i++) {
       const c = it.orientacao === "L" ? L : it.orientacao === "A" ? A : P;
-      resultado.perfis.push({ matId: it.matId, comprimento: Math.max(0, Math.round(c - (+it.desc || 0))), cor: corPerfil, origem: "base" });
+      resultado.perfis.push({ matId: it.matId, comprimento: Math.max(0, Math.round(c - evalFormula(it.desc, vars))), cor: corPerfil, origem: "base" });
     }
   });
 
@@ -391,14 +385,12 @@ function calcularVao(vao, movel) {
     
     for (let i = 0; i < qtd; i++) {
       let larg = 0, alt = 0;
-      
-      // As variáveis que você pode usar dentro do "Desc. L" e "Desc. A"
       const v = { L, A, P, N: qtd, LM: L/2, PM: P/2, LM_D: (L/2)-25, PM_D: (P/2)-25 };
 
       switch (it.orientacao) {
         case "porta": 
-          larg = (L - (+it.descL || 0) * (qtd + 1)) / qtd; 
-          alt = A - (+it.descA || 0); 
+          larg = (L - evalFormula(it.descL, v) * (qtd + 1)) / qtd; 
+          alt = A - evalFormula(it.descA, v); 
           break;
         case "LA": 
           larg = evalFormula(it.descL, v) || L; 
@@ -412,27 +404,21 @@ function calcularVao(vao, movel) {
           larg = evalFormula(it.descL, v) || A; 
           alt = evalFormula(it.descA, v) || P; 
           break;
-        case "custom_metade": // NOVA OPÇÃO: Metade Largura x Profundidade
+        case "custom_metade":
           larg = evalFormula(it.descL, v) || (L/2 - 25); 
           alt = evalFormula(it.descA, v) || P; 
           break;
-        case "custom_condicional": // NOVA OPÇÃO: Fórmula Condicional
+        case "custom_condicional":
           larg = evalFormula(it.descL, v) || L; 
           alt = evalFormula(it.descA, v) || A; 
           break;
         default: 
-          larg = L - (+it.descL || 0); 
-          alt = A - (+it.descA || 0);
+          larg = L - evalFormula(it.descL, v); 
+          alt = A - evalFormula(it.descA, v);
       }
       
       if (larg > 0 && alt > 0) {
-        resultado.vidros.push({ 
-          matId: it.matId, 
-          largura: Math.round(larg), 
-          altura: Math.round(alt), 
-          cor: corVidro, 
-          rotulo: it.rotulo || "" 
-        });
+        resultado.vidros.push({ matId: it.matId, largura: Math.round(larg), altura: Math.round(alt), cor: corVidro, rotulo: it.rotulo || "" });
       }
     }
   });
@@ -452,11 +438,11 @@ function calcularVao(vao, movel) {
     for (let i = 0; i < qtd; i++) {
       let larg = 0, alt = 0;
       switch (it.orientacao) {
-        case "LA": larg = L - (+it.descL || 0); alt = A - (+it.descA || 0); break;
-        case "LP": larg = L - (+it.descL || 0); alt = P - (+it.descA || 0); break;
-        case "PA": larg = P - (+it.descL || 0); alt = A - (+it.descA || 0); break;
-        case "AL": larg = A - (+it.descL || 0); alt = L - (+it.descA || 0); break;
-        default: larg = L - (+it.descL || 0); alt = A - (+it.descA || 0);
+        case "LA": larg = L - evalFormula(it.descL, vars); alt = A - evalFormula(it.descA, vars); break;
+        case "LP": larg = L - evalFormula(it.descL, vars); alt = P - evalFormula(it.descA, vars); break;
+        case "PA": larg = P - evalFormula(it.descL, vars); alt = A - evalFormula(it.descA, vars); break;
+        case "AL": larg = A - evalFormula(it.descL, vars); alt = L - evalFormula(it.descA, vars); break;
+        default: larg = L - evalFormula(it.descL, vars); alt = A - evalFormula(it.descA, vars);
       }
       if (larg > 0 && alt > 0) resultado.acm.push({ matId: it.matId, largura: Math.round(larg), altura: Math.round(alt), cor: corVidro, rotulo: it.rotulo || "" });
     }
@@ -481,9 +467,9 @@ function calcularEstruturaAmbiente(amb) {
   const res = { perfis: [], vidros: [], acm: [], acess: {}, custo: { perfis: 0, vidros: 0, acm: 0, acess: 0, total: 0 } };
   const corPerfil = amb.corPerfil || "A definir", corVidro = amb.corVidro || "A definir";
 
-  (est.perfis || []).forEach(it => { const qtd = Math.round(evalFormula(it.qtdFormula, vars)); if (qtd <= 0) return; for (let i = 0; i < qtd; i++) { const c = it.orientacao === "L" ? L : it.orientacao === "A" ? A : P; res.perfis.push({ matId: it.matId, comprimento: Math.max(0, Math.round(c - (+it.desc || 0))), cor: corPerfil }); } });
-  (est.vidros || []).forEach(it => { const qtd = Math.round(evalFormula(it.qtdFormula, vars)); if (qtd <= 0) return; for (let i = 0; i < qtd; i++) { let larg = 0, alt = 0; switch (it.orientacao) { case "F": larg = L - (+it.descL || 0); alt = A - (+it.descA || 0); break; case "LAT": larg = P - (+it.descL || 0); alt = A - (+it.descA || 0); break; case "FUNDO": larg = L - (+it.descL || 0); alt = A - (+it.descA || 0); break; default: larg = L - (+it.descL || 0); alt = A - (+it.descA || 0); } if (larg > 0 && alt > 0) res.vidros.push({ matId: it.matId, largura: Math.round(larg), altura: Math.round(alt), cor: corVidro, rotulo: it.rotulo || "Fechamento" }); } });
-  (est.acm || []).forEach(it => { const qtd = Math.round(evalFormula(it.qtdFormula, vars)); if (qtd <= 0) return; for (let i = 0; i < qtd; i++) { let larg = 0, alt = 0; switch (it.orientacao) { case "F": larg = L - (+it.descL || 0); alt = A - (+it.descA || 0); break; case "LAT": larg = P - (+it.descL || 0); alt = A - (+it.descA || 0); break; case "FUNDO": larg = L - (+it.descL || 0); alt = A - (+it.descA || 0); break; default: larg = L - (+it.descL || 0); alt = A - (+it.descA || 0); } if (larg > 0 && alt > 0) res.acm.push({ matId: it.matId, largura: Math.round(larg), altura: Math.round(alt), cor: corVidro, rotulo: it.rotulo || "Fechamento" }); } });
+  (est.perfis || []).forEach(it => { const qtd = Math.round(evalFormula(it.qtdFormula, vars)); if (qtd <= 0) return; for (let i = 0; i < qtd; i++) { const c = it.orientacao === "L" ? L : it.orientacao === "A" ? A : P; res.perfis.push({ matId: it.matId, comprimento: Math.max(0, Math.round(c - evalFormula(it.desc, vars))), cor: corPerfil }); } });
+  (est.vidros || []).forEach(it => { const qtd = Math.round(evalFormula(it.qtdFormula, vars)); if (qtd <= 0) return; for (let i = 0; i < qtd; i++) { let larg = 0, alt = 0; switch (it.orientacao) { case "F": larg = L - evalFormula(it.descL, vars); alt = A - evalFormula(it.descA, vars); break; case "LAT": larg = P - evalFormula(it.descL, vars); alt = A - evalFormula(it.descA, vars); break; case "FUNDO": larg = L - evalFormula(it.descL, vars); alt = A - evalFormula(it.descA, vars); break; default: larg = L - evalFormula(it.descL, vars); alt = A - evalFormula(it.descA, vars); } if (larg > 0 && alt > 0) res.vidros.push({ matId: it.matId, largura: Math.round(larg), altura: Math.round(alt), cor: corVidro, rotulo: it.rotulo || "Fechamento" }); } });
+  (est.acm || []).forEach(it => { const qtd = Math.round(evalFormula(it.qtdFormula, vars)); if (qtd <= 0) return; for (let i = 0; i < qtd; i++) { let larg = 0, alt = 0; switch (it.orientacao) { case "F": larg = L - evalFormula(it.descL, vars); alt = A - evalFormula(it.descA, vars); break; case "LAT": larg = P - evalFormula(it.descL, vars); alt = A - evalFormula(it.descA, vars); break; case "FUNDO": larg = L - evalFormula(it.descL, vars); alt = A - evalFormula(it.descA, vars); break; default: larg = L - evalFormula(it.descL, vars); alt = A - evalFormula(it.descA, vars); } if (larg > 0 && alt > 0) res.acm.push({ matId: it.matId, largura: Math.round(larg), altura: Math.round(alt), cor: corVidro, rotulo: it.rotulo || "Fechamento" }); } });
   (est.acess || []).forEach(it => { const qtd = Math.round(evalFormula(it.qtdFormula, vars)); if (qtd <= 0) return; res.acess[it.matId] = (res.acess[it.matId] || 0) + qtd; });
 
   res.perfis.forEach(p => { const m = matById(p.matId); if (m) res.custo.perfis += (m.preco || 0) * (p.comprimento / 1000); });
@@ -892,8 +878,7 @@ function renderVao(a, v) {
 }
 
 /* =====================================================================
-   RENDER — COMPOSIÇÕES, MATERIAIS, RESULTADO, PROPOSTA, COMPRA, HIST
-   (NÃO ALTERADOS - MANTIDOS IDÊNTICOS AO SEU APP.JS ORIGINAL)
+   RENDER — COMPOSIÇÕES
    ===================================================================== */
 function renderEditorComposicoes() {
   const tabs = document.getElementById("tabsTipoVao"); if (!tabs) return;
@@ -903,15 +888,17 @@ function renderEditorComposicoes() {
   const isEst = compTabAtual === "estrutura", comp = isEst ? state.estrutura : state.composicoes[compTabAtual], temPrat = !isEst && comp && comp.prateleiras;
   document.getElementById("editorTipoVao").innerHTML = `<div class="tabs-inner"><div class="tab ${compSubTab === 'perfis' ? 'on' : ''}" onclick="compSubTab='perfis';renderEditorComposicoes()">🔩 Perfis</div><div class="tab ${compSubTab === 'vidros' ? 'on' : ''}" onclick="compSubTab='vidros';renderEditorComposicoes()">🪟 Vidros / ACM</div><div class="tab ${compSubTab === 'acess' ? 'on' : ''}" onclick="compSubTab='acess';renderEditorComposicoes()">🔧 Acessórios</div>${temPrat ? `<div class="tab ${compSubTab === 'prat' ? 'on' : ''}" onclick="compSubTab='prat';renderEditorComposicoes()">📚 Prateleiras</div>` : ""}</div>${renderCompTabela(compTabAtual, compSubTab, isEst ? state.estrutura[compSubTab] : state.composicoes[compTabAtual][compSubTab])}<p class="small">Variáveis: <b>L</b> · <b>A</b> · <b>P</b> · <b>V</b> (vãos) · <b>N</b> (gavetas/portas).<br>${isEst ? `<b>F</b> (frente), <b>LAT</b> (laterais), <b>FUNDO</b> (fundo).` : `Vidro: <b>porta</b> (divide pelo N).`}</p><button class="btn no-print" onclick="addItemComp()">+ Adicionar item</button>`;
 }
+
 function renderCompTabela(tipoVao, cat, itens) {
   if (!itens) itens = [];
   const isEst = tipoVao === "estrutura";
-  if (cat === "prat") { const p = state.composicoes[tipoVao].prateleiras; return `<div class="subcard"><div class="row" style="margin-bottom:10px"><label style="margin:0"><input type="checkbox" ${p.ativo ? "checked" : ""} onchange="setPrat('${tipoVao}','ativo',this.checked)" style="margin-right:6px"> Ativar prateleiras</label></div><div class="grid g4"><div><label>Qtd padrão</label><input type="number" min="1" value="${p.qtd || 2}" onchange="setPrat('${tipoVao}','qtd',+this.value)"></div><div><label>Vidro</label><select onchange="setPrat('${tipoVao}','vidro.matId',this.value)">${state.materiais.vidros.map(m => `<option value="${m.id}" ${p.vidro?.matId === m.id ? "selected" : ""}>${escapeHtml(m.nome)}</option>`).join("")}</select></div><div><label>Desc. L</label><input type="number" value="${p.vidro?.descL || 0}" onchange="setPrat('${tipoVao}','vidro.descL',+this.value)"></div><div><label>Desc. A</label><input type="number" value="${p.vidro?.descA || 0}" onchange="setPrat('${tipoVao}','vidro.descA',+this.value)"></div><div><label>Perfil</label><select onchange="setPrat('${tipoVao}','perfil.matId',this.value)">${state.materiais.perfis.map(m => `<option value="${m.id}" ${p.perfil?.matId === m.id ? "selected" : ""}>${escapeHtml(m.nome)}</option>`).join("")}</select></div><div><label>Orient.</label><select onchange="setPrat('${tipoVao}','perfil.orientacao',this.value)"><option value="L" ${p.perfil?.orientacao === 'L' ? 'selected' : ''}>L</option><option value="A" ${p.perfil?.orientacao === 'A' ? 'selected' : ''}>A</option><option value="P" ${p.perfil?.orientacao === 'P' ? 'selected' : ''}>P</option></select></div><div><label>Suporte</label><select onchange="setPrat('${tipoVao}','acess.matId',this.value)">${state.materiais.acess.map(m => `<option value="${m.id}" ${p.acess?.matId === m.id ? "selected" : ""}>${escapeHtml(m.nome)}</option>`).join("")}</select></div><div><label>Sup./prat.</label><input type="number" min="0" value="${p.acess?.porPrateleira || 2}" onchange="setPrat('${tipoVao}','acess.porPrateleira',+this.value)"></div></div></div>`; }
+  if (cat === "prat") { const p = state.composicoes[tipoVao].prateleiras; return `<div class="subcard"><div class="row" style="margin-bottom:10px"><label style="margin:0"><input type="checkbox" ${p.ativo ? "checked" : ""} onchange="setPrat('${tipoVao}','ativo',this.checked)" style="margin-right:6px"> Ativar prateleiras</label></div><div class="grid g4"><div><label>Qtd padrão</label><input type="number" min="1" value="${p.qtd || 2}" onchange="setPrat('${tipoVao}','qtd',+this.value)"></div><div><label>Vidro</label><select onchange="setPrat('${tipoVao}','vidro.matId',this.value)">${state.materiais.vidros.map(m => `<option value="${m.id}" ${p.vidro?.matId === m.id ? "selected" : ""}>${escapeHtml(m.nome)}</option>`).join("")}</select></div><div><label>Desc. L</label><input type="text" value="${p.vidro?.descL || 0}" onchange="setPrat('${tipoVao}','vidro.descL',this.value)"></div><div><label>Desc. A</label><input type="text" value="${p.vidro?.descA || 0}" onchange="setPrat('${tipoVao}','vidro.descA',this.value)"></div><div><label>Perfil</label><select onchange="setPrat('${tipoVao}','perfil.matId',this.value)">${state.materiais.perfis.map(m => `<option value="${m.id}" ${p.perfil?.matId === m.id ? "selected" : ""}>${escapeHtml(m.nome)}</option>`).join("")}</select></div><div><label>Orient.</label><select onchange="setPrat('${tipoVao}','perfil.orientacao',this.value)"><option value="L" ${p.perfil?.orientacao === 'L' ? 'selected' : ''}>L</option><option value="A" ${p.perfil?.orientacao === 'A' ? 'selected' : ''}>A</option><option value="P" ${p.perfil?.orientacao === 'P' ? 'selected' : ''}>P</option></select></div><div><label>Suporte</label><select onchange="setPrat('${tipoVao}','acess.matId',this.value)">${state.materiais.acess.map(m => `<option value="${m.id}" ${p.acess?.matId === m.id ? "selected" : ""}>${escapeHtml(m.nome)}</option>`).join("")}</select></div><div><label>Sup./prat.</label><input type="number" min="0" value="${p.acess?.porPrateleira || 2}" onchange="setPrat('${tipoVao}','acess.porPrateleira',+this.value)"></div></div></div>`; }
   if (cat === "acess") { return `<table><thead><tr><th>Material</th><th>Qtd</th><th></th></tr></thead><tbody>${itens.map((it, i) => `<tr><td><select onchange="setCompItem('${tipoVao}','${cat}',${i},'matId',this.value)">${state.materiais.acess.map(m => `<option value="${m.id}" ${it.matId === m.id ? "selected" : ""}>${escapeHtml(m.nome)}</option>`).join("")}</select></td><td><input value="${escapeHtml(it.qtdFormula || '')}" onchange="setCompItem('${tipoVao}','${cat}',${i},'qtdFormula',this.value)"></td><td><button class="btn err xs no-print" onclick="delCompItem('${tipoVao}','${cat}',${i})">✕</button></td></tr>`).join("")}</tbody></table>`; }
-  if (cat === "perfis") { return `<table><thead><tr><th>Perfil</th><th>Qtd</th><th>Orient.</th><th>Desc.</th><th></th></tr></thead><tbody>${itens.map((it, i) => `<tr><td><select onchange="setCompItem('${tipoVao}','${cat}',${i},'matId',this.value)">${state.materiais.perfis.map(m => `<option value="${m.id}" ${it.matId === m.id ? "selected" : ""}>${escapeHtml(m.nome)}</option>`).join("")}</select></td><td><input value="${escapeHtml(it.qtdFormula || '')}" onchange="setCompItem('${tipoVao}','${cat}',${i},'qtdFormula',this.value)"></td><td><select onchange="setCompItem('${tipoVao}','${cat}',${i},'orientacao',this.value)"><option value="L" ${it.orientacao === 'L' ? 'selected' : ''}>L</option><option value="A" ${it.orientacao === 'A' ? 'selected' : ''}>A</option><option value="P" ${it.orientacao === 'P' ? 'selected' : ''}>P</option></select></td><td><input type="number" value="${it.desc || 0}" onchange="setCompItem('${tipoVao}','${cat}',${i},'desc',+this.value)"></td><td><button class="btn err xs no-print" onclick="delCompItem('${tipoVao}','${cat}',${i})">✕</button></td></tr>`).join("")}</tbody></table>`; }
-  if (cat === "vidros") { return `<table><thead><tr><th>Material</th><th>Qtd</th><th>Orient.</th><th>Desc.L</th><th>Desc.A</th><th>Rótulo</th><th></th></tr></thead><tbody>${itens.map((it, i) => `<tr><td><select onchange="setCompItem('${tipoVao}','${cat}',${i},'matId',this.value)"><optgroup label="Vidros">${state.materiais.vidros.map(m => `<option value="${m.id}" ${it.matId === m.id ? "selected" : ""}>${escapeHtml(m.nome)}</option>`).join("")}</optgroup><optgroup label="ACM">${state.materiais.acm.map(m => `<option value="${m.id}" ${it.matId === m.id ? "selected" : ""}>${escapeHtml(m.nome)}</option>`).join("")}</optgroup></select></td><td><input value="${escapeHtml(it.qtdFormula || '')}" onchange="setCompItem('${tipoVao}','${cat}',${i},'qtdFormula',this.value)"></td><td><select onchange="setCompItem('${tipoVao}','${cat}',${i},'orientacao',this.value)">${isEst ? `<option value="F" ${it.orientacao === 'F' ? 'selected' : ''}>F</option><option value="LAT" ${it.orientacao === 'LAT' ? 'selected' : ''}>LAT</option><option value="FUNDO" ${it.orientacao === 'FUNDO' ? 'selected' : ''}>FUNDO</option>` : `<option value="porta" ${it.orientacao === 'porta' ? 'selected' : ''}>porta</option>`}<option value="LA" ${it.orientacao === 'LA' ? 'selected' : ''}>LA</option><option value="LP" ${it.orientacao === 'LP' ? 'selected' : ''}>LP</option><option value="AP" ${it.orientacao === 'AP' ? 'selected' : ''}>AP</option></select></td><td><input type="number" value="${it.descL || 0}" onchange="setCompItem('${tipoVao}','${cat}',${i},'descL',+this.value)"></td><td><input type="number" value="${it.descA || 0}" onchange="setCompItem('${tipoVao}','${cat}',${i},'descA',+this.value)"></td><td><input value="${escapeHtml(it.rotulo || '')}" onchange="setCompItem('${tipoVao}','${cat}',${i},'rotulo',this.value)"></td><td><button class="btn err xs no-print" onclick="delCompItem('${tipoVao}','${cat}',${i})">✕</button></td></tr>`).join("")}</tbody></table>`; }
+  if (cat === "perfis") { return `<table><thead><tr><th>Perfil</th><th>Qtd</th><th>Orient.</th><th>Desc.</th><th></th></tr></thead><tbody>${itens.map((it, i) => `<tr><td><select onchange="setCompItem('${tipoVao}','${cat}',${i},'matId',this.value)">${state.materiais.perfis.map(m => `<option value="${m.id}" ${it.matId === m.id ? "selected" : ""}>${escapeHtml(m.nome)}</option>`).join("")}</select></td><td><input value="${escapeHtml(it.qtdFormula || '')}" onchange="setCompItem('${tipoVao}','${cat}',${i},'qtdFormula',this.value)"></td><td><select onchange="setCompItem('${tipoVao}','${cat}',${i},'orientacao',this.value)"><option value="L" ${it.orientacao === 'L' ? 'selected' : ''}>L</option><option value="A" ${it.orientacao === 'A' ? 'selected' : ''}>A</option><option value="P" ${it.orientacao === 'P' ? 'selected' : ''}>P</option></select></td><td><input type="text" value="${it.desc || 0}" onchange="setCompItem('${tipoVao}','${cat}',${i},'desc',this.value)"></td><td><button class="btn err xs no-print" onclick="delCompItem('${tipoVao}','${cat}',${i})">✕</button></td></tr>`).join("")}</tbody></table>`; }
+  if (cat === "vidros") { return `<table><thead><tr><th>Material</th><th>Qtd</th><th>Orient.</th><th>Desc.L</th><th>Desc.A</th><th>Rótulo</th><th></th></tr></thead><tbody>${itens.map((it, i) => `<tr><td><select onchange="setCompItem('${tipoVao}','${cat}',${i},'matId',this.value)"><optgroup label="Vidros">${state.materiais.vidros.map(m => `<option value="${m.id}" ${it.matId === m.id ? "selected" : ""}>${escapeHtml(m.nome)}</option>`).join("")}</optgroup><optgroup label="ACM">${state.materiais.acm.map(m => `<option value="${m.id}" ${it.matId === m.id ? "selected" : ""}>${escapeHtml(m.nome)}</option>`).join("")}</optgroup></select></td><td><input value="${escapeHtml(it.qtdFormula || '')}" onchange="setCompItem('${tipoVao}','${cat}',${i},'qtdFormula',this.value)"></td><td><select onchange="setCompItem('${tipoVao}','${cat}',${i},'orientacao',this.value)">${isEst ? `<option value="F" ${it.orientacao === 'F' ? 'selected' : ''}>F</option><option value="LAT" ${it.orientacao === 'LAT' ? 'selected' : ''}>LAT</option><option value="FUNDO" ${it.orientacao === 'FUNDO' ? 'selected' : ''}>FUNDO</option>` : `<option value="porta" ${it.orientacao === 'porta' ? 'selected' : ''}>porta</option>`}<option value="LA" ${it.orientacao === 'LA' ? 'selected' : ''}>LA</option><option value="LP" ${it.orientacao === 'LP' ? 'selected' : ''}>LP</option><option value="AP" ${it.orientacao === 'AP' ? 'selected' : ''}>AP</option><option value="custom_metade" ${it.orientacao === 'custom_metade' ? 'selected' : ''}>Metade/Prof</option><option value="custom_condicional" ${it.orientacao === 'custom_condicional' ? 'selected' : ''}>Condicional</option></select></td><td><input type="text" value="${it.descL || 0}" onchange="setCompItem('${tipoVao}','${cat}',${i},'descL',this.value)" placeholder="Ex: LM_D"></td><td><input type="text" value="${it.descA || 0}" onchange="setCompItem('${tipoVao}','${cat}',${i},'descA',this.value)" placeholder="Ex: PM_D"></td><td><input value="${escapeHtml(it.rotulo || '')}" onchange="setCompItem('${tipoVao}','${cat}',${i},'rotulo',this.value)"></td><td><button class="btn err xs no-print" onclick="delCompItem('${tipoVao}','${cat}',${i})">✕</button></td></tr>`).join("")}</tbody></table>`; }
   return "";
 }
+
 function setCompItem(t, c, i, k, v) { snapshotParaUndo(); if (t === "estrutura") state.estrutura[c][i][k] = v; else state.composicoes[t][c][i][k] = v; invalidarCaches(); save(); render(); }
 function delCompItem(t, c, i) { snapshotParaUndo(); if (t === "estrutura") state.estrutura[c].splice(i, 1); else state.composicoes[t][c].splice(i, 1); invalidarCaches(); save(); render(); }
 function addItemComp() { snapshotParaUndo(); const t = compTabAtual, cat = compSubTab; if (cat === "prat") { toast("Já configurado", false); return; } const def = { matId: (state.materiais[cat] && state.materiais[cat][0]?.id) || "", qtdFormula: "1" }; if (cat === "perfis") { def.orientacao = "L"; def.desc = 0; } if (cat === "vidros") { def.orientacao = t === "estrutura" ? "F" : "porta"; def.descL = 3; def.descA = 6; def.rotulo = "Fechamento"; } if (t === "estrutura") { if (cat === "vidros") def.matId = "v_temperado"; if (cat === "perfis") def.matId = "p_tubo5050"; state.estrutura[cat].push(def); } else { state.composicoes[t][cat].push(def); } invalidarCaches(); save(); render(); }
