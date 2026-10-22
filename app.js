@@ -386,17 +386,53 @@ function calcularVao(vao, movel) {
   });
 
   (comp.vidros || []).forEach(it => {
-    const qtd = Math.round(evalFormula(it.qtdFormula, vars)); if (qtd <= 0) return;
+    const qtd = Math.round(evalFormula(it.qtdFormula, vars)); 
+    if (qtd <= 0) return;
+    
     for (let i = 0; i < qtd; i++) {
       let larg = 0, alt = 0;
+      
+      // NOVA LÓGICA: Avalia a orientação e as variáveis (LM, PM, descontos)
       switch (it.orientacao) {
-        case "porta": larg = (L - (+it.descL || 0) * (qtd + 1)) / qtd; alt = A - (+it.descA || 0); break;
-        case "LA": larg = L - (+it.descL || 0); alt = A - (+it.descA || 0); break;
-        case "LP": larg = L - (+it.descL || 0); alt = P - (+it.descA || 0); break;
-        case "AP": larg = A - (+it.descL || 0); alt = P - (+it.descA || 0); break;
-        default: larg = L - (+it.descL || 0); alt = A - (+it.descA || 0);
+        case "porta": 
+          // Divide a largura pelo número de portas e aplica os descontos
+          larg = evalFormula(it.descL || "0", { L: (L / qtd), A, P, N: qtd }); 
+          alt = A - evalFormula(it.descA || "0", { L, A, P, N: qtd }); 
+          break;
+        case "LA": // Largura x Altura
+          larg = evalFormula(it.descL || "0", { L, A, P, N: qtd }); 
+          alt = evalFormula(it.descA || "0", { L, A, P, N: qtd }); 
+          break;
+        case "LP": // Largura x Profundidade
+          larg = evalFormula(it.descL || "0", { L, A, P, N: qtd }); 
+          alt = evalFormula(it.descA || "0", { L, A, P, N: qtd }); 
+          break;
+        case "AP": // Altura x Profundidade
+          larg = evalFormula(it.descL || "0", { L, A, P, N: qtd }); 
+          alt = evalFormula(it.descA || "0", { L, A, P, N: qtd }); 
+          break;
+        case "LM_P": // Metade Largura x Profundidade (customizado)
+          larg = evalFormula(it.descL || "0", { L, A, P, N: qtd, LM_D: (L/2)-25 }); 
+          alt = evalFormula(it.descA || "0", { L, A, P, N: qtd, PM_D: P-25 }); 
+          break;
+        default: 
+          larg = evalFormula(it.descL || "0", { L, A, P, N: qtd }); 
+          alt = evalFormula(it.descA || "0", { L, A, P, N: qtd });
       }
-      if (larg > 0 && alt > 0) resultado.vidros.push({ matId: it.matId, largura: Math.round(larg), altura: Math.round(alt), cor: corVidro, rotulo: it.rotulo || "" });
+
+      // Se o usuário digitou a fórmula direta na descrição (ex: LM_D ou PM_D), usamos
+      if (it.descL && it.descL.includes("LM")) larg = evalFormula(it.descL, { L, A, P, N: qtd });
+      if (it.descA && it.descA.includes("PM")) alt = evalFormula(it.descA, { L, A, P, N: qtd });
+
+      if (larg > 0 && alt > 0) {
+        resultado.vidros.push({ 
+          matId: it.matId, 
+          largura: Math.round(larg), 
+          altura: Math.round(alt), 
+          cor: corVidro, 
+          rotulo: it.rotulo || "" 
+        });
+      }
     }
   });
 
