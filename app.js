@@ -904,7 +904,6 @@ function renderEditorComposicoes() {
   document.getElementById("editorTipoVao").innerHTML = `<div class="tabs-inner"><div class="tab ${compSubTab === 'perfis' ? 'on' : ''}" onclick="compSubTab='perfis';renderEditorComposicoes()">🔩 Perfis</div><div class="tab ${compSubTab === 'vidros' ? 'on' : ''}" onclick="compSubTab='vidros';renderEditorComposicoes()">🪟 Vidros / ACM</div><div class="tab ${compSubTab === 'acess' ? 'on' : ''}" onclick="compSubTab='acess';renderEditorComposicoes()">🔧 Acessórios</div>${temPrat ? `<div class="tab ${compSubTab === 'prat' ? 'on' : ''}" onclick="compSubTab='prat';renderEditorComposicoes()">📚 Prateleiras</div>` : ""}</div>${renderCompTabela(compTabAtual, compSubTab, isEst ? state.estrutura[compSubTab] : state.composicoes[compTabAtual][compSubTab])}<p class="small">Variáveis: <b>L</b> · <b>A</b> · <b>P</b> · <b>V</b> (vãos) · <b>N</b> (gavetas/portas).<br>${isEst ? `<b>F</b> (frente), <b>LAT</b> (laterais), <b>FUNDO</b> (fundo).` : `Vidro: <b>porta</b> (divide pelo N).`}</p><button class="btn no-print" onclick="addItemComp()">+ Adicionar item</button>`;
 }
 function renderCompTabela(tipoVao, cat, itens) {
-function renderCompTabela(tipoVao, cat, itens) {
   if (!itens) itens = [];
   const isEst = tipoVao === "estrutura";
   
