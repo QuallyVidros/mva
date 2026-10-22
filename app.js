@@ -293,7 +293,7 @@ function evalFormula(formula, vars) {
     console.warn("Erro na fórmula:", formula, e);
     return 0; 
   }
-}
+
    }function corClass(cor) { return "pill " + (cor || "adefinir").toLowerCase().replace(/[^a-z]/g, ""); }
 function corPill(cor, prefixo) { return `<span class="${corClass(cor)}">${escapeHtml((prefixo || "") + (cor || "A definir"))}</span>`; }
 function corDoPerfil(cor) { const map = { "Bronze": "#a0522d", "Preto": "#1a1a1a", "Branco": "#e5e7eb", "Champanhe": "#d9cbb0", "Fosco": "#4b5563", "A definir": "#7c3aed" }; return map[cor] || "#64748b"; }
