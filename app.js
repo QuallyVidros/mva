@@ -246,8 +246,55 @@ function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":
 function toast(msg, err) { const t = document.getElementById("toast"); if (!t) return; t.textContent = msg; t.className = "toast show" + (err ? " err" : ""); setTimeout(() => { t.className = "toast"; }, 2400); }
 function quickHash(obj) { const s = JSON.stringify(obj); let h = 5381; for (let i = 0; i < s.length; i++) { h = ((h << 5) + h) + s.charCodeAt(i); h = h | 0; } return h.toString(36) + "_" + s.length; }
 function matById(id) { if (!state || !state.materiais) return null; for (const cat of Object.values(state.materiais)) { for (const m of cat) if (m.id === id) return m; } return null; }
-function evalFormula(formula, vars) { if (formula === "" || formula == null) return 0; try { const expr = String(formula).replace(/[LAPNMF]|LAT|FUNDO/g, ch => `(${vars[ch] ?? 0})`); const v = Function(`"use strict";return (${expr});`)(); return isFinite(v) ? v : 0; } catch (e) { return 0; } }
-function corClass(cor) { return "pill " + (cor || "adefinir").toLowerCase().replace(/[^a-z]/g, ""); }
+function evalFormula(formula, vars) {
+  if (formula === "" || formula == null) return 0;
+  
+  // 1. Cria as variáveis dinâmicas (Metades, Descontos, Arredondamentos)
+  const novasVars = { 
+    ...vars, 
+    LM: (vars.L || 0) / 2, 
+    PM: (vars.P || 0) / 2,
+    LM_D: ((vars.L || 0) / 2) - 25,
+    PM_D: ((vars.P || 0) / 2) - 25,
+    Math: Math // Permite usar Math.ceil e Math.floor
+  };
+
+  try {
+    // 2. Substitui o nome das variáveis (L, A, P, etc) pelos valores reais
+    let expr = String(formula).replace(/\b(L|A|P|N|M|LM|PM|LM_D|PM_D)\b/g, ch => {
+      return novasVars[ch] !== undefined ? novasVars[ch] : ch;
+    });
+
+    // 3. TRADUÇÃO DO "SE" DO EXCEL PARA JAVASCRIPT
+    // Transforma o "SE(condição; verdadeiro; falso)" em "(condição ? verdadeiro : falso)"
+    // Usamos um loop para resolver SEs aninhados
+    let oldExpr;
+    do {
+      oldExpr = expr;
+      expr = expr.replace(/(?:SE|se)\s*\(([^,;]+)[,;]([^,;]+)[,;]([^,;()]+(?:\([^)]*\))?[^,;()]*)\)/gi, '($1 ? $2 : $3)');
+    } while (expr !== oldExpr);
+
+    // Traduz E() e OU()
+    expr = expr.replace(/(?:E|e)\s*\(([^;]+);\s*([^;)]+)\)/gi, '($1 && $2)');
+    expr = expr.replace(/(?:OU|ou)\s*\(([^;]+);\s*([^;)]+)\)/gi, '($1 || $2)');
+
+    // Troca ponto e vírgula restante por vírgula (para o caso de ser usado em funções do Math)
+    expr = expr.replace(/;/g, ',');
+
+    // 4. Executa o cálculo matemático
+    const v = Function("Math", `"use strict"; return (${expr});`)(Math);
+    
+    // Se o resultado for booleano (true/false), converte para 1/0
+    if (v === true) return 1;
+    if (v === false) return 0;
+    
+    return isFinite(v) ? v : 0;
+  } catch (e) { 
+    console.warn("Erro na fórmula:", formula, e);
+    return 0; 
+  }
+}
+   }function corClass(cor) { return "pill " + (cor || "adefinir").toLowerCase().replace(/[^a-z]/g, ""); }
 function corPill(cor, prefixo) { return `<span class="${corClass(cor)}">${escapeHtml((prefixo || "") + (cor || "A definir"))}</span>`; }
 function corDoPerfil(cor) { const map = { "Bronze": "#a0522d", "Preto": "#1a1a1a", "Branco": "#e5e7eb", "Champanhe": "#d9cbb0", "Fosco": "#4b5563", "A definir": "#7c3aed" }; return map[cor] || "#64748b"; }
 
@@ -339,18 +386,54 @@ function calcularVao(vao, movel) {
     }
   });
 
-  (comp.vidros || []).forEach(it => {
-    const qtd = Math.round(evalFormula(it.qtdFormula, vars)); if (qtd <= 0) return;
+    (comp.vidros || []).forEach(it => {
+    const qtd = Math.round(evalFormula(it.qtdFormula, vars)); 
+    if (qtd <= 0) return;
+    
     for (let i = 0; i < qtd; i++) {
       let larg = 0, alt = 0;
+      
+      // NOVA LÓGICA: Avalia a orientação e as variáveis (LM, PM, descontos)
       switch (it.orientacao) {
-        case "porta": larg = (L - (+it.descL || 0) * (qtd + 1)) / qtd; alt = A - (+it.descA || 0); break;
-        case "LA": larg = L - (+it.descL || 0); alt = A - (+it.descA || 0); break;
-        case "LP": larg = L - (+it.descL || 0); alt = P - (+it.descA || 0); break;
-        case "AP": larg = A - (+it.descL || 0); alt = P - (+it.descA || 0); break;
-        default: larg = L - (+it.descL || 0); alt = A - (+it.descA || 0);
+        case "porta": 
+          // Divide a largura pelo número de portas e aplica os descontos
+          larg = evalFormula(it.descL || "0", { L: (L / qtd), A, P, N: qtd }); 
+          alt = A - evalFormula(it.descA || "0", { L, A, P, N: qtd }); 
+          break;
+        case "LA": // Largura x Altura
+          larg = evalFormula(it.descL || "0", { L, A, P, N: qtd }); 
+          alt = evalFormula(it.descA || "0", { L, A, P, N: qtd }); 
+          break;
+        case "LP": // Largura x Profundidade
+          larg = evalFormula(it.descL || "0", { L, A, P, N: qtd }); 
+          alt = evalFormula(it.descA || "0", { L, A, P, N: qtd }); 
+          break;
+        case "AP": // Altura x Profundidade
+          larg = evalFormula(it.descL || "0", { L, A, P, N: qtd }); 
+          alt = evalFormula(it.descA || "0", { L, A, P, N: qtd }); 
+          break;
+        case "LM_P": // Metade Largura x Profundidade (customizado)
+          larg = evalFormula(it.descL || "0", { L, A, P, N: qtd, LM_D: (L/2)-25 }); 
+          alt = evalFormula(it.descA || "0", { L, A, P, N: qtd, PM_D: P-25 }); 
+          break;
+        default: 
+          larg = evalFormula(it.descL || "0", { L, A, P, N: qtd }); 
+          alt = evalFormula(it.descA || "0", { L, A, P, N: qtd });
       }
-      if (larg > 0 && alt > 0) resultado.vidros.push({ matId: it.matId, largura: Math.round(larg), altura: Math.round(alt), cor: corVidro, rotulo: it.rotulo || "" });
+
+      // Se o usuário digitou a fórmula direta na descrição (ex: LM_D ou PM_D), usamos
+      if (it.descL && it.descL.includes("LM")) larg = evalFormula(it.descL, { L, A, P, N: qtd });
+      if (it.descA && it.descA.includes("PM")) alt = evalFormula(it.descA, { L, A, P, N: qtd });
+
+      if (larg > 0 && alt > 0) {
+        resultado.vidros.push({ 
+          matId: it.matId, 
+          largura: Math.round(larg), 
+          altura: Math.round(alt), 
+          cor: corVidro, 
+          rotulo: it.rotulo || "" 
+        });
+      }
     }
   });
 
