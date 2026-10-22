@@ -392,38 +392,39 @@ function calcularVao(vao, movel) {
     for (let i = 0; i < qtd; i++) {
       let larg = 0, alt = 0;
       
-      // NOVA LÓGICA: Avalia a orientação e as variáveis (LM, PM, descontos)
+      // As variáveis que você pode usar dentro do "Desc. L" e "Desc. A"
+      const v = { L, A, P, N: qtd, LM: L/2, PM: P/2, LM_D: (L/2)-25, PM_D: (P/2)-25 };
+
       switch (it.orientacao) {
         case "porta": 
-          // Divide a largura pelo número de portas e aplica os descontos
-          larg = evalFormula(it.descL || "0", { L: (L / qtd), A, P, N: qtd }); 
-          alt = A - evalFormula(it.descA || "0", { L, A, P, N: qtd }); 
+          larg = (L - (+it.descL || 0) * (qtd + 1)) / qtd; 
+          alt = A - (+it.descA || 0); 
           break;
-        case "LA": // Largura x Altura
-          larg = evalFormula(it.descL || "0", { L, A, P, N: qtd }); 
-          alt = evalFormula(it.descA || "0", { L, A, P, N: qtd }); 
+        case "LA": 
+          larg = evalFormula(it.descL, v) || L; 
+          alt = evalFormula(it.descA, v) || A; 
           break;
-        case "LP": // Largura x Profundidade
-          larg = evalFormula(it.descL || "0", { L, A, P, N: qtd }); 
-          alt = evalFormula(it.descA || "0", { L, A, P, N: qtd }); 
+        case "LP": 
+          larg = evalFormula(it.descL, v) || L; 
+          alt = evalFormula(it.descA, v) || P; 
           break;
-        case "AP": // Altura x Profundidade
-          larg = evalFormula(it.descL || "0", { L, A, P, N: qtd }); 
-          alt = evalFormula(it.descA || "0", { L, A, P, N: qtd }); 
+        case "AP": 
+          larg = evalFormula(it.descL, v) || A; 
+          alt = evalFormula(it.descA, v) || P; 
           break;
-        case "LM_P": // Metade Largura x Profundidade (customizado)
-          larg = evalFormula(it.descL || "0", { L, A, P, N: qtd, LM_D: (L/2)-25 }); 
-          alt = evalFormula(it.descA || "0", { L, A, P, N: qtd, PM_D: P-25 }); 
+        case "custom_metade": // NOVA OPÇÃO: Metade Largura x Profundidade
+          larg = evalFormula(it.descL, v) || (L/2 - 25); 
+          alt = evalFormula(it.descA, v) || P; 
+          break;
+        case "custom_condicional": // NOVA OPÇÃO: Fórmula Condicional
+          larg = evalFormula(it.descL, v) || L; 
+          alt = evalFormula(it.descA, v) || A; 
           break;
         default: 
-          larg = evalFormula(it.descL || "0", { L, A, P, N: qtd }); 
-          alt = evalFormula(it.descA || "0", { L, A, P, N: qtd });
+          larg = L - (+it.descL || 0); 
+          alt = A - (+it.descA || 0);
       }
-
-      // Se o usuário digitou a fórmula direta na descrição (ex: LM_D ou PM_D), usamos
-      if (it.descL && it.descL.includes("LM")) larg = evalFormula(it.descL, { L, A, P, N: qtd });
-      if (it.descA && it.descA.includes("PM")) alt = evalFormula(it.descA, { L, A, P, N: qtd });
-
+      
       if (larg > 0 && alt > 0) {
         resultado.vidros.push({ 
           matId: it.matId, 
